@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+
+    <title>Jones Big Ass Weather Dashboard</title>
+
+    <script src="js/tensorflow.min.js"></script>
+    <script src="js/lodash.min.js"></script>
+    <script src="js/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/react.development.js"></script>
+    <script src="js/react-dom.development.js"></script>
+    <script src="js/babel.min.js"></script>
+    <script src="js/recharts.js"></script>
+    <script src="js/suncalc.js"></script>
+
+    <script src="js/react.development.js"></script>
+    <script src="js/react-dom.development.js"></script>
+    <script src="js/lodash.min.js"></script>
+    <script src="js/papaparse.min.js"></script>
+    <script src="js/babel.min.js"></script>
+    <script src="weatherAnalysis.js" type="text/babel"></script>
+
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        padding: 15px;
+        background: #f0f2f5;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      h1 {
+        color: #1a2b3c;
+        margin-bottom: 1rem;
+        font-size: 3.5rem;
+        text-align: center;
+      }
+      h2 {
+        color: #1a2b3c;
+        margin-bottom: 1rem;
+        font-size: 0.8rem;
+        text-align: center;
+        font-style: italic;
+      }
+      .dashboard {
+        display: grid;
+        gap: 15px;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        margin-bottom: 15px;
+      }
+      .card {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .card h2 {
+        color: #2c3e50;
+        margin-bottom: 15px;
+        font-size: 1.3rem;
+      }
+      .value {
+        font-size: 2em;
+        margin: 10px 0;
+        color: #2c3e50;
+        font-weight: 500;
+      }
+      .label {
+        color: #64748b;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .chart-container {
+        height: 250px;
+        margin-top: 10px;
+      }
+      .error {
+        color: #dc2626;
+        padding: 10px;
+        margin: 10px 0;
+        background: #fef2f2;
+        border-radius: 8px;
+        display: none;
+      }
+      .error.visible {
+        display: block;
+      }
+      @media (max-width: 768px) {
+        body {
+          padding: 10px;
+        }
+        h1 {
+          font-size: 1.5rem;
+        }
+        .value {
+          font-size: 1.5em;
+        }
+        .chart-container {
+          height: 200px;
+        }
+      }
+      @media (max-width: 480px) {
+        .dashboard {
+          grid-template-columns: 1fr;
+        }
+        .card {
+          padding: 15px;
+        }
+      }
+      .dashboard-info {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-bottom: 20px;
+        background: white;
+        padding: 15px;
+        border-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .info-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .info-label {
+        color: #64748b;
+        font-weight: 500;
+        font-size: 0.9rem;
+      }
+      .time-controls {
+        display: flex;
+        gap: 5px; /* Reduced gap */
+        margin-bottom: 20px;
+        justify-content: center;
+        flex-wrap: wrap; /* Allow wrapping */
+      }
+      .time-btn {
+        padding: 6px 10px; /* Reduced padding */
+        font-size: 0.9rem; /* Smaller font */
+        min-width: 70px; /* Minimum width */
+      }
+      @media (max-width: 480px) {
+        .time-btn {
+          font-size: 0.8rem;
+          padding: 4px 8px;
+        }
+      }
+      .time-btn:hover {
+        background: #f0f2f5;
+      }
+      .time-btn.active {
+        background: #2c3e50;
+        color: white;
+      }
+      .dashboard-nav {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .nav-btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        background: #f0f2f5;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      .nav-btn.active {
+        background: #2c3e50;
+        color: white;
+      }
+      #currentView,
+      #forecastView {
+        display: none;
+      }
+      #currentView.active,
+      #forecastView.active {
+        display: block;
+      }
+      #myforecastView {
+        display: none;
+      }
+      #myforecastView.active {
+        display: block;
+      }
+      .gps-status {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin: 10px auto;
+        background: #111;
+      }
+      .gps-status.red {
+        background: #f00;
+        box-shadow: 0 0 20px #f00;
+      }
+      .gps-status.yellow {
+        background: #ff0;
+        box-shadow: 0 0 20px #ff0;
+      }
+      .gps-status.green {
+        background: #0f0;
+        box-shadow: 0 0 20px #0f0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Jones Big Ass Weather Dashboard</h1>
+    <h2>Collectin' Some Good Ass Weather Data!</h2>
+
+    <!--Top Navigation Tab-->
+    <div class="dashboard-nav">
+      <button class="nav-btn active" data-view="current">Current Conditions</button>
+      <button class="nav-btn" data-view="forecast">Forecast & Analysis</button>
+      <button class="nav-btn" data-view="myforecast">My Forecast</button>
+    </div>
+
+    <!--Current Conditions Tab-->
+    <div id="currentView" class="active">
+      <div class="dashboard-info">
+        <!--Date and Last Updated-->
+        <span>
+          <div class="info-item">
+            <span class="info-label">Date:</span>
+            <span id="currentDate">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Last Updated:</span>
+            <span id="lastUpdate">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Altitude:</span>
+            <span id="altitude">--</span>
+          </div>
+        </span>
+
+        <!--Moon Info-->
+        <span>
+          <div class="info-item">
+            <span class="info-label">Phase (Illum):</span>
+            <span id="moonPhase">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Moonrise:</span>
+            <span id="moonrise">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Moonset:</span>
+            <span id="moonset">--</span>
+          </div>
+        </span>
+
+        <!--Sun Info-->
+        <span>
+          <div class="info-item">
+            <span class="info-label">Sunrise (Dawn):</span>
+            <span id="sunrise">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Solar Noon:</span>
+            <span id="solarnoon">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Sunset (Dusk):</span>
+            <span id="sunset">--</span>
+          </div>
+        </span>
+      </div>
+
+      <!--Error Messages-->
+      <div id="errorMessages" class="error"></div>
+
+      <!--Outdoor and Indoor Conditions-->
+      <div class="dashboard">
+        <!--Outdoor Conditions-->
+        <div class="card">
+          <h2>Outdoor Conditions</h2>
+          <div class="label">Temperature</div>
+          <div id="outdoorTemp" class="value">--</div>
+          <div class="label">Humidity</div>
+          <div id="outdoorHumidity" class="value">--</div>
+          <div class="label">Pressure</div>
+          <div id="outdoorPressure" class="value">--</div>
+          <div class="label">Dewpoint</div>
+          <div id="outdoorDewpoint" class="value">--</div>
+          <div class="label">Visible (IR)</div>
+          <div id="outdoorLuxPercent" class="value">--</div>
+          <div class="label">GPS Status</div>
+          <div
+            class="gps-status"
+            title="Latitude: -- °
+Longitude: -- °
+Altitude: -- m
+Satellites: --"
+            id="gpsStatus"
+          ></div>
+          <div class="label">Device Status</div>
+          <div id="deviceStatus" class="value">--</div>
+        </div>
+
+        <!--Indoor Conditions-->
+        <div class="card">
+          <h2>Indoor Conditions</h2>
+          <div class="label">Temperature</div>
+          <div id="indoorTemp" class="value">--</div>
+          <div class="label">Humidity</div>
+          <div id="indoorHumidity" class="value">--</div>
+          <div class="label">Pressure</div>
+          <div id="indoorPressure" class="value">--</div>
+          <div class="label">Dewpoint</div>
+          <div id="indoorDewpoint" class="value">--</div>
+          <h2>Indoor 2 Conditions</h2>
+          <div class="label">Temperature</div>
+          <div id="basementTemp" class="value">--</div>
+          <div class="label">Humidity</div>
+          <div id="basementHumidity" class="value">--</div>
+          <div class="label">Pressure</div>
+          <div id="basementPressure" class="value">--</div>
+          <div class="label">Dewpoint</div>
+          <div id="basementDewpoint" class="value">--</div>
+        </div>
+      </div>
+
+      <!--Time Interval Selectors-->
+      <div class="time-controls">
+        <button class="time-btn" data-hours="1">1 Hour</button>
+        <button class="time-btn" data-hours="6">6 Hours</button>
+        <button class="time-btn" data-hours="12">12 Hours</button>
+        <button class="time-btn" data-hours="24">1 Day</button>
+        <button class="time-btn" data-hours="48">2 Days</button>
+        <button class="time-btn" data-hours="72">3 Days</button>
+        <button class="time-btn" data-hours="168">1 Week</button>
+      </div>
+
+      <!--Temperature History-->
+      <div class="card">
+        <h2>Temperature History</h2>
+        <div class="chart-container">
+          <canvas id="tempChart"></canvas>
+        </div>
+      </div>
+
+      <!--Humidity History-->
+      <div class="card">
+        <h2>Humidity History</h2>
+        <div class="chart-container">
+          <canvas id="humidityChart"></canvas>
+        </div>
+      </div>
+
+      <!--Pressure History-->
+      <div class="card">
+        <h2>Pressure History</h2>
+        <div class="chart-container">
+          <canvas id="pressureChart"></canvas>
+        </div>
+      </div>
+
+      <!--Dewpoint History-->
+      <div class="card">
+        <h2>Dewpoint History</h2>
+        <div class="chart-container">
+          <canvas id="dewpointChart"></canvas>
+        </div>
+      </div>
+
+      <!--Visible Light History-->
+      <div class="card">
+        <h2>Visible Light History</h2>
+        <div class="chart-container">
+          <canvas id="visibleChart"></canvas>
+        </div>
+      </div>
+
+      <!--IR Light History-->
+      <div class="card">
+        <h2>IR Light History</h2>
+        <div class="chart-container">
+          <canvas id="irChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!--Forecast & Analysis Tab-->
+    <div id="forecastView">
+      <script type="text/babel">
+        const { WeatherAnalysis } = window;
+        ReactDOM.render(<WeatherAnalysis />, document.getElementById("forecastView"));
+      </script>
+    </div>
+
+    <!--My Forecast Tab-->
+    <div id="myforecastView">
+      <script type="text/babel">
+        // Shared components for use across React components
+        const SharedComponents = {
+          Card: ({ children, className = "" }) => <div className={`bg-white p-4 rounded-lg shadow ${className}`}>{children}</div>,
+          CardHeader: ({ children }) => <div className="mb-4">{children}</div>,
+          CardTitle: ({ children }) => <h2 className="text-xl font-bold">{children}</h2>,
+          CardContent: ({ children }) => <div>{children}</div>,
+        };
+      </script>
+
+      <script type="text/babel">
+        function TimelyForecast() {
+          // Default values for analysis span, recent span, and extra weight the recent span time period
+          const [analysisSpan, setAnalysisSpan] = React.useState(30);
+          const [recentSpan, setRecentSpan] = React.useState(3);
+          const [extraWeight, setExtraWeight] = React.useState(90);
+
+          const { Card, CardHeader, CardTitle, CardContent } = SharedComponents;
+          const [forecasts, setForecasts] = React.useState([]);
+          const chartRef = React.useRef(null);
+          const [chart, setChart] = React.useState(null);
+          const [error, setError] = React.useState(null);
+
+          React.useEffect(() => {
+            loadForecasts();
+            const interval = setInterval(loadForecasts, 60000);
+            return () => clearInterval(interval);
+          }, []);
+
+          function getNextInterval(date) {
+            const minutes = date.getMinutes();
+            const roundUp = Math.ceil(minutes / 15) * 15;
+            return new Date(date.setMinutes(roundUp, 0, 0));
+          }
+
+          function generateTimePoints() {
+            const start = getNextInterval(new Date());
+            const points = [];
+            for (let i = 0; i < 48; i++) {
+              // 12 hours * 4 intervals
+              points.push(new Date(start.getTime() + i * 15 * 60000));
+            }
+            return points;
+          }
+
+          async function loadForecasts() {
+            try {
+              setError(null);
+
+              // Include hours parameter for database query (convert days to hours)
+              const hours = analysisSpan * 24;
+              const response = await fetch(`/weather_data_outdoor.csv?hours=${hours}`);
+              const text = await response.text();
+
+              Papa.parse(text, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                  const historicalData = results.data;
+
+                  // Check data sufficiency
+                  if (historicalData.length === 0) {
+                    setError("No historical data available.");
+                    setForecasts([]);
+                    return;
+                  }
+
+                  // Sort data by timestamp to ensure proper order
+                  historicalData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+                  const oldestDate = new Date(historicalData[0]?.timestamp);
+                  const newestDate = new Date(historicalData[historicalData.length - 1]?.timestamp);
+                  const daysDiff = (newestDate - oldestDate) / (1000 * 60 * 60 * 24);
+
+                  // Use available data even if less than requested analysis span
+                  const effectiveAnalysisSpan = Math.min(analysisSpan, daysDiff);
+
+                  // Generate forecast time points
+                  const timePoints = generateTimePoints();
+
+                  // Create forecast based on available data
+                  const forecasts = timePoints
+                    .map((forecastTime) => {
+                      const prediction = predictConditions(historicalData, forecastTime, effectiveAnalysisSpan);
+                      return {
+                        time: forecastTime,
+                        ...prediction,
+                      };
+                    })
+                    .filter((f) => f.temperatureC !== undefined);
+
+                  // Show informational message if we're using less data than requested
+                  if (daysDiff < analysisSpan) {
+                    setError(`Notice: Using ${daysDiff.toFixed(1)} days of data for analysis (requested ${analysisSpan} days)`);
+                  } else {
+                    setError(null);
+                  }
+
+                  setForecasts(forecasts);
+                  updateChart(forecasts);
+                },
+              });
+            } catch (error) {
+              setError(`Error loading data: ${error.message}`);
+            }
+          }
+
+          function predictConditions(data, targetTime, effectiveAnalysisSpan) {
+            const targetHourMinute = targetTime.getHours() * 60 + targetTime.getMinutes();
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - effectiveAnalysisSpan);
+            const recentCutoff = new Date();
+            recentCutoff.setDate(recentCutoff.getDate() - recentSpan);
+
+            const relevantReadings = data.filter((reading) => {
+              const readingDate = new Date(reading.timestamp);
+              if (readingDate > new Date()) return false;
+              if (readingDate < cutoffDate) return false;
+
+              const readingMinutes = readingDate.getHours() * 60 + readingDate.getMinutes();
+              return Math.abs(readingMinutes - targetHourMinute) <= 7; // Within 7 minutes
+            });
+
+            if (relevantReadings.length === 0) return {};
+
+            let weightedSum = { temp: 0, humidity: 0, pressure: 0 };
+            let weightSum = 0;
+
+            relevantReadings.forEach((reading) => {
+              const readingDate = new Date(reading.timestamp);
+              const weight = readingDate > recentCutoff ? 1 + extraWeight / 100 : 1;
+
+              weightedSum.temp += reading.temperatureC * weight;
+              weightedSum.humidity += reading.humidity * weight;
+              weightedSum.pressure += reading.pressure * weight;
+              weightSum += weight;
+            });
+
+            return {
+              temperatureC: weightedSum.temp / weightSum,
+              humidity: weightedSum.humidity / weightSum,
+              pressure: weightedSum.pressure / weightSum,
+            };
+          }
+
+          function updateChart(forecasts) {
+            const ctx = document.getElementById("timelyChart");
+            if (!ctx) return;
+
+            if (chart) {
+              chart.destroy();
+            }
+
+            const newChart = new Chart(ctx, {
+              type: "line",
+              data: {
+                labels: forecasts.map((f) => f.time.toLocaleTimeString()),
+                datasets: [
+                  {
+                    label: "Temperature °C",
+                    data: forecasts.map((f) => f.temperatureC),
+                    borderColor: "rgb(75, 192, 192)",
+                    yAxisID: "temp",
+                  },
+                  {
+                    label: "Temperature °F",
+                    data: forecasts.map((f) => (f.temperatureC * 9) / 5 + 32),
+                    borderColor: "rgb(255, 99, 132)",
+                    yAxisID: "temp",
+                  },
+                  {
+                    label: "Humidity %",
+                    data: forecasts.map((f) => f.humidity),
+                    borderColor: "rgb(54, 162, 235)",
+                    yAxisID: "humidity",
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  temp: {
+                    type: "linear",
+                    position: "left",
+                    title: {
+                      display: true,
+                      text: "Temperature",
+                    },
+                  },
+                  humidity: {
+                    type: "linear",
+                    position: "right",
+                    title: {
+                      display: true,
+                      text: "Humidity %",
+                    },
+                  },
+                },
+              },
+            });
+            setChart(newChart);
+          }
+
+          React.useEffect(() => {
+            // Load saved settings
+            const saved = localStorage.getItem("forecastSettings");
+            if (saved) {
+              const settings = JSON.parse(saved);
+              setAnalysisSpan(settings.analysisSpan);
+              setRecentSpan(settings.recentSpan);
+              setExtraWeight(settings.extraWeight);
+            }
+          }, []);
+
+          // Save settings when applied
+          const saveAndApplySettings = () => {
+            localStorage.setItem(
+              "forecastSettings",
+              JSON.stringify({
+                analysisSpan,
+                recentSpan,
+                extraWeight,
+              })
+            );
+            loadForecasts();
+          };
+
+          return (
+            <div className="space-y-6 p-4">
+              {error && <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700">{error}</div>}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-3xl text-gray-800">Jones Good Ass Weather Predictions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[400px] bg-white rounded-lg p-4">
+                    <canvas id="timelyChart"></canvas>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle className="text-2xl text-gray-800">Forecast Settings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Analysis Span (days)</label>
+                      <input type="number" value={analysisSpan} onChange={(e) => setAnalysisSpan(Number(e.target.value))} className="mt-1 p-2 border rounded w-full" min="1" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Recent Data Span (days)</label>
+                      <input type="number" value={recentSpan} onChange={(e) => setRecentSpan(Number(e.target.value))} className="mt-1 p-2 border rounded w-full" min="1" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Extra Weight (%)</label>
+                      <input type="number" value={extraWeight} onChange={(e) => setExtraWeight(Number(e.target.value))} className="mt-1 p-2 border rounded w-full" min="0" max="100" />
+                    </div>
+                  </div>
+                  <button onClick={saveAndApplySettings} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                    Apply Settings
+                  </button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-3xl text-gray-800">Jones Detailed Ass Weather Forecast</CardTitle>
+                </CardHeader>
+
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {forecasts.slice(0, 48).map((forecast, index) => (
+                      <div key={index} style={{ backgroundColor: index % 2 === 0 ? "#e0ffe0" : "white" }}>
+                        <p className="font-bold" style={{ fontWeight: "900" }}>
+                          {forecast.time.toLocaleTimeString("en-GB", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                        <p>
+                          Temperature: {forecast.temperatureC.toFixed(1)}°C ({((forecast.temperatureC * 9) / 5 + 32).toFixed(1)}°F)
+                        </p>
+                        <p>Humidity: {forecast.humidity.toFixed(1)}%</p>
+                        <p>Pressure: {forecast.pressure.toFixed(1)} hPa</p>
+                        <br />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          );
+        }
+
+        ReactDOM.render(<TimelyForecast />, document.getElementById("myforecastView"));
+      </script>
+    </div>
+
+    <!--Javascript Functions-->
+    <script>
+      // TODO: Set default values
+      let selectedHours = 24; // Default to 24 hours
+
+      const RequiredSatellites = 6;
+      let CurrentLat = 39.4332; // Initial values
+      let CurrentLong = -104.5188;
+
+      const OutdoorVisibleMax = 10000;
+      const OutdoorIRMax = 10000;
+
+      // Ensure DOM is loaded before running
+      document.addEventListener("DOMContentLoaded", () => {
+        loadHistoricalData().then(() => {
+          updateHeaderInfo();
+          updateData();
+          setInterval(updateData, 60000);
+          setInterval(updateHeaderInfo, 3600000);
+        });
+      });
+
+      document.querySelectorAll(".time-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".time-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          selectedHours = parseInt(btn.dataset.hours);
+          loadHistoricalData();
+        });
+      });
+
+      function calculateDewPoint(tempC, humidity) {
+        const a = 17.27;
+        const b = 237.7;
+        const gamma = (a * tempC) / (b + tempC) + Math.log(humidity / 100.0);
+        const dewPoint = (b * gamma) / (a - gamma);
+        return dewPoint;
+      }
+
+      function calculateDewPointF(dewpointC) {
+        return (dewpointC * 9) / 5 + 32;
+      }
+
+      function hPaToInHg(hPa) {
+        return hPa * 0.02953;
+      }
+
+      function hPaToSeaLevel(stationPressure, elevation, temperature) {
+        const g = 9.80665; // gravitational acceleration
+        const R = 287.05; // gas constant for dry air
+        const T = temperature + 273.15; // convert to Kelvin
+
+        return stationPressure * Math.exp((g * elevation) / (R * T));
+      }
+
+      function formatPressure(pressure, temperatureC) {
+        const seaLevelPressure = hPaToSeaLevel(pressure, 1972, temperatureC);
+        const inHg = hPaToInHg(seaLevelPressure);
+        return `${parseFloat(pressure).toFixed(1)} hPa (${parseFloat(inHg).toFixed(2)} inHg)`;
+      }
+
+      function updateHeaderInfo() {
+        const date = new Date();
+        document.getElementById("currentDate").textContent = date.toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "numeric", day: "numeric" });
+
+        const sunTimes = getSunTimes(date, CurrentLat, CurrentLong);
+        const moonTimes = getMoonTimes(date, CurrentLat, CurrentLong);
+
+        const dawn = sunTimes.dawn.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false });
+        const sunrise = sunTimes.rise.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false });
+        const solarnoon = sunTimes.solarnoon.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false });
+        const sunset = sunTimes.set.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false });
+        const dusk = sunTimes.dusk.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false });
+        const moonphaseicon = moonTimes.phaseicon;
+        const moonphasename = moonTimes.phasename;
+        const moonrise = typeof moonTimes.rise.time === "object" && moonTimes.rise.time instanceof Date ? moonTimes.rise.time.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false }) : moonTimes.rise.time;
+        const moonset = typeof moonTimes.set.time === "object" && moonTimes.set.time instanceof Date ? moonTimes.set.time.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: false }) : moonTimes.set.time;
+        const moonillumination = (moonTimes.illumination * 100).toFixed(1);
+
+        document.getElementById("sunrise").textContent = `${sunrise} (${dawn})`;
+        document.getElementById("sunset").textContent = `${sunset} (${dusk})`;
+        document.getElementById("solarnoon").textContent = solarnoon;
+
+        document.getElementById("moonrise").textContent = moonrise;
+        document.getElementById("moonset").textContent = moonset;
+        document.getElementById("moonPhase").textContent = `${moonphaseicon} (${moonillumination}%)`;
+        document.getElementById("moonPhase").title = moonphasename;
+      }
+
+      function getMoonTimes(date, latitude, longitude) {
+        const moonTimes = SunCalc.getMoonTimes(date, latitude, longitude);
+        const moonIllum = SunCalc.getMoonIllumination(date);
+
+        // Initialize with default objects that have a time property
+        var moonRise = { time: "--" };
+        var moonSet = { time: "--" };
+
+        // Only override if actual times exist
+        if (moonTimes.rise) {
+          moonRise = { time: moonTimes.rise };
+        }
+        if (moonTimes.set) {
+          moonSet = { time: moonTimes.set };
+        }
+
+        return {
+          rise: moonRise,
+          set: moonSet,
+          illumination: moonIllum.fraction,
+          phasename: getMoonPhaseTitle(moonIllum.phase),
+          phaseicon: getMoonPhaseIcon(moonIllum.phase),
+        };
+      }
+
+      function getMoonPhaseIcon(phaseValue) {
+        if (phaseValue < 0.0625) return "🌑"; // New Moon
+        if (phaseValue < 0.1875) return "🌒"; // Waxing Crescent
+        if (phaseValue < 0.3125) return "🌓"; // First Quarter
+        if (phaseValue < 0.4375) return "🌔"; // Waxing Gibbous
+        if (phaseValue < 0.5625) return "🌕"; // Full Moon
+        if (phaseValue < 0.6875) return "🌖"; // Waning Gibbous
+        if (phaseValue < 0.8125) return "🌗"; // Last Quarter
+        if (phaseValue < 0.9375) return "🌘"; // Waning Crescent
+        return "🌑";
+      }
+
+      function getMoonPhaseTitle(phaseValue) {
+        if (phaseValue < 0.0625) return " New Moon 🌑"; // New Moon
+        if (phaseValue < 0.1875) return "Waxing Crescent 🌒"; // Waxing Crescent
+        if (phaseValue < 0.3125) return "First Quarter 🌓"; // First Quarter
+        if (phaseValue < 0.4375) return "Waxing Gibbous 🌔"; // Waxing Gibbous
+        if (phaseValue < 0.5625) return "Full Moon 🌕"; // Full Moon
+        if (phaseValue < 0.6875) return "Waning Gibbous 🌖"; // Waning Gibbous
+        if (phaseValue < 0.8125) return "Last Quarter 🌗"; // Last Quarter
+        if (phaseValue < 0.9375) return "Waning Crescent 🌘"; // Waning Crescent
+        return "New Moon 🌑";
+      }
+
+      function getSunTimes(date, latitude, longitude) {
+        const sunTimes = SunCalc.getTimes(date, latitude, longitude);
+
+        return {
+          rise: sunTimes.sunrise,
+          set: sunTimes.sunset,
+          solarnoon: sunTimes.solarNoon,
+          dawn: sunTimes.dawn,
+          dusk: sunTimes.dusk,
+        };
+      }
+
+      const data = {
+        labels: [],
+        //indoor: {
+        //  temp: [],
+        //  humidity: [],
+        //  pressure: [],
+        //  dewpoint: [],
+        //},
+        outdoor: {
+          temp: [],
+          humidity: [],
+          pressure: [],
+          dewpoint: [],
+          lux: [],
+          full: [],
+          visible: [],
+          ir: [],
+          latitude: [],
+          longitude: [],
+          altitude: [],
+          satellites: [],
+          tempOffset: [],
+          rssi: [],
+          uptime: [],
+          freeHeap: [],
+        },
+      };
+
+      function createChart(elementId, label, unit) {
+        return new Chart(document.getElementById(elementId), {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              //{
+              //  label: "Indoor",
+              //  data: [],
+              //  borderColor: "rgb(75, 192, 192)",
+              //  tension: 0.1,
+              //},
+              {
+                label: "Outdoor",
+                data: [],
+                borderColor: "rgb(255, 99, 132)",
+                tension: 0.1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                title: {
+                  display: true,
+                  text: unit,
+                },
+                ticks: {
+                  callback: function (value) {
+                    if (unit.includes("Temperature")) {
+                      return `${value.toFixed(1)}°C (${((value * 9) / 5 + 32).toFixed(1)}°F)`;
+                    } else if (unit.includes("Pressure")) {
+                      return `${value.toFixed(1)} hPa (${hPaToInHg(value).toFixed(2)} inHg)`;
+                    } else if (unit.includes("Dewpoint")) {
+                      return `${value.toFixed(1)}°C (${((value * 9) / 5 + 32).toFixed(1)}°F)`;
+                    }
+                    return value.toFixed(1);
+                  },
+                },
+              },
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    let value = context.raw;
+                    if (unit.includes("Temperature") || unit.includes("Dewpoint")) {
+                      return `${context.dataset.label}: ${value.toFixed(1)}°C (${((value * 9) / 5 + 32).toFixed(1)}°F)`;
+                    } else if (unit.includes("Pressure")) {
+                      return `${context.dataset.label}: ${value.toFixed(1)} hPa (${hPaToInHg(value).toFixed(2)} inHg)`;
+                    }
+                    return `${context.dataset.label}: ${value.toFixed(1)}${unit.includes("Humidity") ? "%" : ""}`;
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      const charts = {
+        temp: createChart("tempChart", "Temperature", "Temperature"),
+        humidity: createChart("humidityChart", "Humidity", "Humidity (%)"),
+        pressure: createChart("pressureChart", "Pressure", "Pressure"),
+        dewpoint: createChart("dewpointChart", "Dewpoint", "Dewpoint"),
+        visible: createChart("visibleChart", "Visible Light", "Light Level"),
+        ir: createChart("irChart", "IR Light", "Light Level"),
+      };
+
+      function formatTemp(temp, unit) {
+        return `${parseFloat(temp).toFixed(1)}\u00B0${unit}`;
+      }
+
+      document.querySelector('[data-hours="24"]').classList.add("active");
+
+      async function loadHistoricalData() {
+        try {
+          const [indoorResponse, outdoorResponse] = await Promise.all([fetch(`/weather_data_indoor.csv?hours=${selectedHours}`), fetch(`/weather_data_outdoor.csv?hours=${selectedHours}`)]);
+
+          const indoorCsv = await indoorResponse.text();
+          const outdoorCsv = await outdoorResponse.text();
+
+          const indoorData = Papa.parse(indoorCsv, {
+            header: true,
+          }).data.filter((row) => row.timestamp);
+          const outdoorData = Papa.parse(outdoorCsv, {
+            header: true,
+          }).data.filter((row) => row.timestamp);
+
+          const lastRecords = Math.min(168 * 60, outdoorData.length);
+
+          const recentIndoorData = indoorData.slice(-lastRecords);
+          const recentOutdoorData = outdoorData.slice(-lastRecords);
+
+          data.labels = recentIndoorData.map((row) => new Date(row.timestamp).toLocaleTimeString());
+
+          //data.indoor.temp = recentIndoorData.map((row) => parseFloat(row.temperatureC));
+          //data.indoor.humidity = recentIndoorData.map((row) => parseFloat(row.humidity));
+          //data.indoor.pressure = recentIndoorData.map((row) => parseFloat(row.pressure));
+          //data.indoor.dewpoint = recentIndoorData.map((row) => calculateDewPoint(parseFloat(row.temperatureC), parseFloat(row.humidity)));
+
+          data.outdoor.temp = recentOutdoorData.map((row) => parseFloat(row.temperatureC));
+          data.outdoor.humidity = recentOutdoorData.map((row) => parseFloat(row.humidity));
+          data.outdoor.pressure = recentOutdoorData.map((row) => parseFloat(row.pressure));
+          data.outdoor.dewpoint = recentOutdoorData.map((row) => calculateDewPoint(parseFloat(row.temperatureC), parseFloat(row.humidity)));
+          data.outdoor.lux = recentOutdoorData.map((row) => parseFloat(row.lux));
+          data.outdoor.full = recentOutdoorData.map((row) => parseFloat(row.full));
+          data.outdoor.visible = recentOutdoorData.map((row) => parseFloat(row.visible));
+          data.outdoor.ir = recentOutdoorData.map((row) => parseFloat(row.ir));
+          data.outdoor.latitude = recentOutdoorData.map((row) => parseFloat(row.latitude));
+          data.outdoor.longitude = recentOutdoorData.map((row) => parseFloat(row.longitude));
+          data.outdoor.altitude = recentOutdoorData.map((row) => parseFloat(row.altitude));
+          data.outdoor.satellites = recentOutdoorData.map((row) => parseFloat(row.satellites));
+
+          updateCharts();
+        } catch (error) {
+          console.error("Error loading historical data:", error);
+          document.getElementById("errorMessages").textContent = `Error loading historical data: ${error.message}`;
+        }
+      }
+
+      async function updateGPSCoordinates() {
+        try {
+          const outdoor = await getData("http://192.168.1.60/data");
+          if (outdoor.satellites >= RequiredSatellites) {
+            CurrentLat = outdoor.latitude;
+            CurrentLong = outdoor.longitude;
+            console.log(`Setting current latitude (${CurrentLat}) and longitude (${CurrentLong}) based on ${outdoor.satellites} GPS satellites`);
+          }
+        } catch (error) {
+          console.error("Error updating GPS coordinates:", error);
+        }
+      }
+
+      updateGPSCoordinates();
+      setInterval(updateGPSCoordinates, 60000); // Update every minute
+
+      function updateCharts() {
+        charts.temp.data.labels = data.labels;
+        //charts.temp.data.datasets[0].data = data.indoor.temp;
+        //charts.temp.data.datasets[1].data = data.outdoor.temp;
+        charts.temp.data.datasets[0].data = data.outdoor.temp;
+        charts.temp.update();
+
+        charts.humidity.data.labels = data.labels;
+        //charts.humidity.data.datasets[0].data = data.indoor.humidity;
+        //charts.humidity.data.datasets[1].data = data.outdoor.humidity;
+        charts.humidity.data.datasets[0].data = data.outdoor.humidity;
+        charts.humidity.update();
+
+        charts.pressure.data.labels = data.labels;
+        //charts.pressure.data.datasets[0].data = data.indoor.pressure;
+        //charts.pressure.data.datasets[1].data = data.outdoor.pressure;
+        charts.pressure.data.datasets[0].data = data.outdoor.pressure;
+        charts.pressure.update();
+
+        charts.dewpoint.data.labels = data.labels;
+        //charts.dewpoint.data.datasets[0].data = data.indoor.dewpoint;
+        //charts.dewpoint.data.datasets[1].data = data.outdoor.dewpoint;
+        charts.dewpoint.data.datasets[0].data = data.outdoor.dewpoint;
+        charts.dewpoint.update();
+
+        charts.visible.data.labels = data.labels;
+        //charts.visible.data.datasets[0].data = new Array(data.labels.length).fill(null); // No indoor visible data
+        //charts.visible.data.datasets[1].data = data.outdoor.visible;
+        charts.visible.data.datasets[0].data = data.outdoor.visible;
+        charts.visible.update();
+
+        charts.ir.data.labels = data.labels;
+        //charts.ir.data.datasets[0].data = new Array(data.labels.length).fill(null); // No indoor IR data
+        //charts.ir.data.datasets[1].data = data.outdoor.ir;
+        charts.ir.data.datasets[0].data = data.outdoor.ir;
+        charts.ir.update();
+      }
+
+      async function getData(url, retries = 2, timeout = 10000) {
+        // For direct device connections, use the proxy
+        if (url.includes("192.168.1.")) {
+          // Instead of direct connection:
+          // const fetchPromise = fetch(url);
+
+          // Use the proxy endpoint:
+          const fetchPromise = fetch(`/?url=${encodeURIComponent(url)}`);
+
+          let lastError;
+
+          for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+              const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error("Request timed out")), timeout);
+              });
+
+              const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+              const text = await response.text();
+              const sanitizedText = text
+                .replace(/"nan"/gi, "null")
+                .replace(/:\s*nan\s*([,}])/gi, ":null$1")
+                .replace(/:\s*undefined\s*([,}])/gi, ":null$1");
+
+              return JSON.parse(sanitizedText);
+            } catch (error) {
+              console.warn(`Attempt ${attempt + 1}/${retries + 1} failed for ${url}: ${error.message}`);
+              lastError = error;
+
+              if (attempt < retries) {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+              }
+            }
+          }
+
+          console.error("Failed to fetch data from:", url);
+          console.error("Original error:", lastError);
+          throw lastError;
+        } else {
+          // Use proxy for external URLs
+          return fetch(`/?url=${encodeURIComponent(url)}`);
+        }
+      }
+
+      function calculateAbsoluteHumidity(temperatureC, relativeHumidity) {
+        // Convert temperature to Kelvin
+        const temperatureK = temperatureC + 273.15;
+
+        // Calculate saturation vapor pressure (in hPa)
+        const saturationVaporPressure = 6.112 * Math.exp((17.67 * temperatureC) / (temperatureC + 243.5));
+
+        // Calculate absolute humidity (in g/m³)
+        const absoluteHumidity = (saturationVaporPressure * relativeHumidity * 2.1674) / temperatureK;
+
+        return absoluteHumidity;
+      }
+
+      function formatDuration(milliseconds) {
+        const units = [
+          { label: "year", ms: 365 * 24 * 60 * 60 * 1000 },
+          { label: "day", ms: 24 * 60 * 60 * 1000 },
+          { label: "hour", ms: 60 * 60 * 1000 },
+          { label: "minute", ms: 60 * 1000 },
+          { label: "second", ms: 1000 },
+        ];
+
+        const parts = [];
+
+        for (const { label, ms } of units) {
+          const value = Math.floor(milliseconds / ms);
+          if (value > 0) {
+            parts.push(`${value} ${label}${value > 1 ? "s" : ""}`);
+            milliseconds %= ms;
+          }
+        }
+
+        return parts.length > 0 ? parts.join(", ") : "0 seconds";
+      }
+
+      function formatFreeHeap(freeHeap) {
+        const units = ["bytes", "KB", "MB", "GB"];
+        let index = 0;
+
+        while (freeHeap >= 1024 && index < units.length - 1) {
+          freeHeap /= 1024;
+          index++;
+        }
+
+        return `${freeHeap.toFixed(2)} ${units[index]}`;
+      }
+
+      async function updateData() {
+        const errorDiv = document.getElementById("errorMessages");
+
+        try {
+          const outdoor = await getData("http://192.168.1.60/data");
+          const indoor = await getData("http://192.168.1.61/data");
+          const basement = await getData("http://192.168.1.63/data");
+
+          const gpsStatus = document.getElementById("gpsStatus");
+          if (!gpsStatus) return;
+
+          // GPS Status
+          const lat = outdoor?.latitude != null ? outdoor.latitude.toFixed(6) : "--";
+          const lon = outdoor?.longitude != null ? outdoor.longitude.toFixed(6) : "--";
+          const alt = outdoor?.altitude != null ? outdoor.altitude.toFixed(1) : "--";
+          const sat = outdoor?.satellites ?? "--";
+
+          gpsStatus.title = `Latitude: ${lat}°\n` + `Longitude: ${lon}°\n` + `Altitude: ${alt}m\n` + `Satellites: ${sat}`;
+
+          gpsStatus.className = "gps-status " + (sat >= 8 ? "green" : sat >= 4 ? "yellow" : "red");
+
+          // Basic info updates
+          document.getElementById("lastUpdate").textContent = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: false });
+
+          document.getElementById("altitude").textContent = outdoor?.altitude != null ? `${outdoor.altitude.toFixed(0)}m (${(outdoor.altitude * 3.2808399).toFixed(0)}ft)` : "--";
+
+          errorDiv.textContent = "";
+          errorDiv.classList.remove("visible");
+
+          // Outdoor sensor updates
+          if (outdoor?.temperatureC != null && outdoor?.humidity != null) {
+            const outdoorDewpoint = calculateDewPoint(outdoor.temperatureC, outdoor.humidity);
+            const outdoorDewpointF = calculateDewPointF(outdoorDewpoint);
+            document.getElementById("outdoorTemp").textContent = `${formatTemp(outdoor.temperatureC, "C")} (${formatTemp(outdoor.temperatureF, "F")})`;
+            document.getElementById("outdoorHumidity").textContent = `${parseFloat(outdoor.humidity).toFixed(1)}% (${calculateAbsoluteHumidity(outdoor.temperatureC, outdoor.humidity).toFixed(2)} g/m³)`;
+            document.getElementById("outdoorDewpoint").textContent = `${formatTemp(outdoorDewpoint, "C")} (${formatTemp(outdoorDewpointF, "F")})`;
+          }
+
+          if (outdoor?.pressure != null && outdoor?.temperatureC != null) {
+            document.getElementById("outdoorPressure").textContent = formatPressure(outdoor.pressure, outdoor.temperatureC);
+          }
+
+          if (outdoor?.visible != null && outdoor?.ir != null) {
+            document.getElementById("outdoorLuxPercent").textContent = `${((outdoor.visible / OutdoorVisibleMax) * 100).toFixed(2)}% (${((outdoor.ir / OutdoorIRMax) * 100).toFixed(2)}%)`;
+            document.getElementById("outdoorLuxPercent").title = `Lux: ${outdoor?.lux?.toFixed(1) ?? "--"} lux\n` + `Full: ${outdoor?.full ?? "--"}\n` + `Visible: ${outdoor?.visible ?? "--"}\n` + `IR: ${outdoor?.ir ?? "--"}`;
+          }
+
+          // Device status updates
+          if (outdoor?.tempOffset != null && outdoor?.rssi != null && outdoor?.uptime != null && outdoor?.freeHeap != null) {
+            var currentDeviceStatus = `Temp Offset: ${outdoor.tempOffset} \n RSSI: ${outdoor.rssi} \n Uptime: ${formatDuration(outdoor.uptime)} \n Free Heap: ${formatFreeHeap(outdoor.freeHeap)}`;
+            document.getElementById("deviceStatus").textContent = "Online";
+            document.getElementById("deviceStatus").title = currentDeviceStatus;
+          } else {
+            document.getElementById("deviceStatus").textContent = "Offline";
+            document.getElementById("deviceStatus").title = "";
+          }
+
+          // Indoor sensor updates
+          if (indoor?.temperatureC != null && indoor?.humidity != null) {
+            const indoorDewpoint = calculateDewPoint(indoor.temperatureC, indoor.humidity);
+            const indoorDewpointF = calculateDewPointF(indoorDewpoint);
+            document.getElementById("indoorTemp").textContent = `${formatTemp(indoor.temperatureC, "C")} (${formatTemp(indoor.temperatureF, "F")})`;
+            document.getElementById("indoorHumidity").textContent = `${parseFloat(indoor.humidity).toFixed(1)}% (${calculateAbsoluteHumidity(indoor.temperatureC, indoor.humidity).toFixed(2)} g/m³)`;
+            document.getElementById("indoorDewpoint").textContent = `${formatTemp(indoorDewpoint, "C")} (${formatTemp(indoorDewpointF, "F")})`;
+          }
+
+          if (indoor?.pressure != null && indoor?.temperatureC != null) {
+            document.getElementById("indoorPressure").textContent = formatPressure(indoor.pressure, indoor.temperatureC);
+          }
+
+          // Basement sensor updates
+          if (basement?.temperatureC != null && basement?.humidity != null) {
+            const basementDewpoint = calculateDewPoint(basement.temperatureC, basement.humidity);
+            const basementDewpointF = calculateDewPointF(basementDewpoint);
+            document.getElementById("basementTemp").textContent = `${formatTemp(basement.temperatureC, "C")} (${formatTemp(basement.temperatureF, "F")})`;
+            document.getElementById("basementHumidity").textContent = `${parseFloat(basement.humidity).toFixed(1)}% (${calculateAbsoluteHumidity(basement.temperatureC, basement.humidity).toFixed(2)} g/m³)`;
+            document.getElementById("basementDewpoint").textContent = `${formatTemp(basementDewpoint, "C")} (${formatTemp(basementDewpointF, "F")})`;
+          }
+
+          if (basement?.pressure != null && basement?.temperatureC != null) {
+            document.getElementById("basementPressure").textContent = formatPressure(basement.pressure, basement.temperatureC);
+          }
+
+          // Chart updates
+          const now = new Date().toLocaleTimeString();
+          data.labels.push(now);
+
+          // Only update data points if values are valid
+          if (outdoor?.temperatureC != null) data.outdoor.temp.push(outdoor.temperatureC);
+          if (outdoor?.humidity != null) data.outdoor.humidity.push(outdoor.humidity);
+          if (outdoor?.pressure != null) data.outdoor.pressure.push(outdoor.pressure);
+          if (outdoor?.temperatureC != null && outdoor?.humidity != null) {
+            data.outdoor.dewpoint.push(calculateDewPoint(outdoor.temperatureC, outdoor.humidity));
+          }
+
+          // Maintain data length limit
+          if (data.labels.length > selectedHours * 60) {
+            data.labels.shift();
+            data.outdoor.temp.shift();
+            data.outdoor.humidity.shift();
+            data.outdoor.pressure.shift();
+            data.outdoor.dewpoint.shift();
+          }
+
+          // Update all charts if they exist
+          if (charts?.temp) {
+            charts.temp.data.labels = data.labels;
+            charts.temp.data.datasets[0].data = data.outdoor.temp;
+            charts.temp.update();
+          }
+
+          if (charts?.humidity) {
+            charts.humidity.data.labels = data.labels;
+            charts.humidity.data.datasets[0].data = data.outdoor.humidity;
+            charts.humidity.update();
+          }
+
+          if (charts?.pressure) {
+            charts.pressure.data.labels = data.labels;
+            charts.pressure.data.datasets[0].data = data.outdoor.pressure;
+            charts.pressure.update();
+          }
+
+          if (charts?.dewpoint) {
+            charts.dewpoint.data.labels = data.labels;
+            charts.dewpoint.data.datasets[0].data = data.outdoor.dewpoint;
+            charts.dewpoint.update();
+          }
+
+          if (charts?.visible && outdoor?.visible != null) {
+            charts.visible.data.labels = data.labels;
+            charts.visible.data.datasets[0].data = data.outdoor.visible;
+            charts.visible.update();
+          }
+
+          if (charts?.ir && outdoor?.ir != null) {
+            charts.ir.data.labels = data.labels;
+            charts.ir.data.datasets[0].data = data.outdoor.ir;
+            charts.ir.update();
+          }
+        } catch (error) {
+          errorDiv.textContent = `Error fetching data: ${error.message}`;
+          errorDiv.classList.add("visible");
+          console.error("Error:", error);
+        }
+      }
+
+      loadHistoricalData().then(() => {
+        updateHeaderInfo(); // Add this line
+        updateData();
+        setInterval(updateData, 60000);
+        setInterval(updateHeaderInfo, 3600000); // Update astronomical data hourly
+      });
+    </script>
+
+    <!--Handle Navigation-->
+    <script type="text/babel">
+      // Handle navigation
+      document.querySelectorAll(".nav-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+
+          const viewId = btn.dataset.view + "View";
+          document.querySelectorAll("#currentView, #forecastView, #myforecastView").forEach((view) => {
+            view.classList.remove("active");
+          });
+          document.getElementById(viewId).classList.add("active");
+        });
+      });
+    </script>
+  </body>
+</html>
