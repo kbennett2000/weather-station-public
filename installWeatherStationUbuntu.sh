@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Installation Script for Weather Reporting System on Ubuntu Server 24.04 LTS
-# Run as sudo ./install-weather-station.sh
+# Run as sudo ./installWeatherStationUbuntu.sh
 
 # Exit on error
 set -e
@@ -39,7 +39,7 @@ echo "Static IP configured. Verify with 'ip addr show'."
 # Step 3: Clone the Repository
 cd ~
 git clone https://github.com/kbennett2000/weather-station-public.git
-cd weather-station
+cd weather-station-public
 
 # Step 4: Set Up MariaDB Database
 echo "Securing MariaDB..."
@@ -97,23 +97,23 @@ systemctl enable mariadb
 echo "Database set up. Password: $db_password (save this securely)."
 
 # Step 5: Set Up Virtual Environment and Dependencies
-python3 -m venv ~/weather-station/venv
-source ~/weather-station/venv/bin/activate
+python3 -m venv ~/weather-station-public/venv
+source ~/weather-station-public/venv/bin/activate
 pip install mysql-connector-python requests
 deactivate
 
 # Step 6: Configure Scripts
 echo "Configuring scripts with database password..."
-sed -i "s/'password': 'password'/'password': '$db_password'/g" ~/weather-station/weatherProxy.py
-sed -i "s/'password': 'password'/'password': '$db_password'/g" ~/weather-station/weatherLogger_Indoor.py
-sed -i "s/'password': 'password'/'password': '$db_password'/g" ~/weather-station/weatherLogger_Outdoor.py
+sed -i "s/'password': 'password'/'password': '$db_password'/g" ~/weather-station-public/weatherProxy.py
+sed -i "s/'password': 'password'/'password': '$db_password'/g" ~/weather-station-public/weatherLogger_Indoor.py
+sed -i "s/'password': 'password'/'password': '$db_password'/g" ~/weather-station-public/weatherLogger_Outdoor.py
 
 # Ensure port 8000 in weatherProxy.py (add check or force set)
-sed -i "s/HTTPServer(('0.0.0.0', 80), ProxyHandler)/HTTPServer(('0.0.0.0', 8000), ProxyHandler)/g" ~/weather-station/weatherProxy.py
+sed -i "s/HTTPServer(('0.0.0.0', 80), ProxyHandler)/HTTPServer(('0.0.0.0', 8000), ProxyHandler)/g" ~/weather-station-public/weatherProxy.py
 
 # Step 7: Test Scripts Manually (script will guide, but manual test required)
-echo "Manual test: Activate venv with 'source ~/weather-station/venv/bin/activate', then run 'python ~/weather-station/weatherProxy.py' and browse to http://<server-ip>:8000. Ctrl+C to stop. Deactivate with 'deactivate'."
-echo "Repeat for loggers: python ~/weather-station/weatherLogger_Indoor.py, etc. Press Enter when done testing."
+echo "Manual test: Activate venv with 'source ~/weather-station-public/venv/bin/activate', then run 'python ~/weather-station-public/weatherProxy.py' and browse to http://<server-ip>:8000. Ctrl+C to stop. Deactivate with 'deactivate'."
+echo "Repeat for loggers: python ~/weather-station-public/weatherLogger_Indoor.py, etc. Press Enter when done testing."
 read -p ""
 
 # Step 8: Set Up Port Forwarding (80 to 8000)
@@ -147,8 +147,8 @@ Description=Weather Dashboard Server
 After=network.target mariadb.service
 
 [Service]
-ExecStart=/home/$(whoami)/weather-station/venv/bin/python /home/$(whoami)/weather-station/weatherProxy.py
-WorkingDirectory=/home/$(whoami)/weather-station
+ExecStart=/home/$(whoami)/weather-station-public/venv/bin/python /home/$(whoami)/weather-station-public/weatherProxy.py
+WorkingDirectory=/home/$(whoami)/weather-station-public
 Restart=always
 User=$(whoami)
 
@@ -162,8 +162,8 @@ Description=Indoor Weather Data Logger
 After=network.target mariadb.service
 
 [Service]
-ExecStart=/home/$(whoami)/weather-station/venv/bin/python /home/$(whoami)/weather-station/weatherLogger_Indoor.py
-WorkingDirectory=/home/$(whoami)/weather-station
+ExecStart=/home/$(whoami)/weather-station-public/venv/bin/python /home/$(whoami)/weather-station-public/weatherLogger_Indoor.py
+WorkingDirectory=/home/$(whoami)/weather-station-public
 Restart=always
 User=$(whoami)
 
@@ -177,8 +177,8 @@ Description=Outdoor Weather Data Logger
 After=network.target mariadb.service
 
 [Service]
-ExecStart=/home/$(whoami)/weather-station/venv/bin/python /home/$(whoami)/weather-station/weatherLogger_Outdoor.py
-WorkingDirectory=/home/$(whoami)/weather-station
+ExecStart=/home/$(whoami)/weather-station-public/venv/bin/python /home/$(whoami)/weather-station-public/weatherLogger_Outdoor.py
+WorkingDirectory=/home/$(whoami)/weather-station-public
 Restart=always
 User=$(whoami)
 
