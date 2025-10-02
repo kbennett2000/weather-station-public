@@ -413,10 +413,73 @@ cd weather-station
    sudo nano /etc/systemd/system/indoor-weather.service
    ```
 
-   Add similar, with `weatherLogger_Indoor.py`. Enable/start.
+   Add:
+
+   ```
+   [Unit]
+   Description=Indoor Weather Service
+   After=network.target mariadb.service
+
+   [Service]
+   ExecStart=/home/kb/weather-station/venv/bin/python /home/kb/weather-station/weatherLogger_Indoor.py
+   WorkingDirectory=/home/kb/weather-station
+   Restart=always
+   User=kb
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+   Enable/start:
+
+   ```bash
+   sudo systemctl daemon-reload
+   ```
+
+   ```bash
+   sudo systemctl enable indoor-weather.service
+   ```
+
+   ```bash
+   sudo systemctl start indoor-weather.service
+   ```
 
 3. Outdoor logger:
-   Similar for `weatherLogger_Outdoor.py`. Enable/start.
+
+   ```bash
+   sudo nano /etc/systemd/system/outdoor-weather.service
+   ```
+
+   Add:
+
+   ```
+   [Unit]
+   Description=Outdoor Weather Service
+   After=network.target mariadb.service
+
+   [Service]
+   ExecStart=/home/kb/weather-station/venv/bin/python /home/kb/weather-station/weatherLogger_Outdoor.py
+   WorkingDirectory=/home/kb/weather-station
+   Restart=always
+   User=kb
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+   Enable/start:
+
+   ```bash
+   sudo systemctl daemon-reload
+   ```
+
+   ```bash
+   sudo systemctl enable outdoor-weather.service
+   ```
+
+   ```bash
+   sudo systemctl start outdoor-weather.service
+   ```
 
 ## Step 10: Firewall Configuration (Optional)
 
