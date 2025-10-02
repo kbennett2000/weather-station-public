@@ -13,8 +13,8 @@ sudo netplan apply
 sudo systemctl restart NetworkManager
 sudo systemctl enable NetworkManager
 nmcli con show
-sudo nmcli con mod "Wired connection 1" ipv4.method manual ipv4.addresses 192.168.1.62/24 ipv4.gateway 192.168.1.1 ipv4.dns "192.168.1.1 8.8.8.8"
-sudo nmcli con up "Wired connection 1"
+sudo nmcli con mod "netplan-enp0s3" ipv4.method manual ipv4.addresses 192.168.1.62/24 ipv4.gateway 192.168.1.1 ipv4.dns "192.168.1.1 8.8.8.8"
+sudo nmcli con up "netplan-enp0s3"
 ip addr show
 cd ~
 git clone https://github.com/kbennett2000/weather-station-public.git
