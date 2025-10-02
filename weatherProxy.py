@@ -212,11 +212,12 @@ class ProxyHandler(SimpleHTTPRequestHandler):
 
 if __name__ == '__main__':
     try:
-        server = HTTPServer(('0.0.0.0', 80), ProxyHandler)
+        server = HTTPServer(('0.0.0.0', 8000), ProxyHandler)
         print(f"Server running on http://0.0.0.0:80")
         print(f"Current directory: {os.getcwd()}")
         logging.info("Weather proxy server started")
         server.serve_forever()
     except Exception as e:
         logging.error(f"Server error: {e}")
+
         print(f"Error: {e}")
