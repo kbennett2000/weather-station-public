@@ -1,7 +1,7 @@
 # weather-station
 
 ## Description:
-This project consists of one to many weather sensors based on an ESP32 control board and several cheap off-the-shelf sensors. Readings from the weather sensors are collected by a light computing device (Raspberry Pi Zero 2 W or Linux PC) and displayed on the local network as well as recorded in a MySQL database to be used for forecasting functions.
+This project consists of one to many weather sensors based on an ESP32 control board running FreeRTOS and several cheap off-the-shelf sensors. Readings from the weather sensors are collected by a light computing device (Raspberry Pi Zero 2 W or Linux PC) and displayed on the local network as well as recorded in a MySQL database to be used for forecasting functions.
 
 ## Instructions:
 - Pin connections for the ESP32 based sensors can be found below.
@@ -44,6 +44,7 @@ This project consists of one to many weather sensors based on an ESP32 control b
 - GND → ESP32 GND
 - SCL → ESP32 GPIO22 (shared with others)
 - SDA → ESP32 GPIO21 (shared with others)
+
 
 
 
