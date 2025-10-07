@@ -1,4 +1,4 @@
-# weather-station
+# weather-station-public
 
 ## Description:
 This project consists of one to many weather sensors based on an ESP32 control board running FreeRTOS and several cheap off-the-shelf sensors. Readings from the weather sensors are collected by a light computing device (Raspberry Pi Zero 2 W or Linux PC) and displayed on the local network as well as recorded in a MySQL database to be used for forecasting functions.
@@ -11,11 +11,12 @@ This project consists of one to many weather sensors based on an ESP32 control b
 
 ## ESP32 / Pi Zero W weather station parts list:
 - Raspberry Pi Zero 2 W or PC running Linux (recommend Ubuntu Server)
-- ESP-32 
-- BME280 temp / humidity / pressure sensor
+- ESP-32 control boards
+- BME280 temp / humidity / pressure sensors
 - TSL2591 light sensor (outdoor only)
 - NEO-6M GPS sensor (outdoor only)
-- Optional 0.96 OLED display
+- 0.96 OLED display (optional)
+- Project boxes or containers for sensors as desired
 
 ## ESP32 Pin Connections:
 ### BME280:
@@ -44,6 +45,7 @@ This project consists of one to many weather sensors based on an ESP32 control b
 - GND → ESP32 GND
 - SCL → ESP32 GPIO22 (shared with others)
 - SDA → ESP32 GPIO21 (shared with others)
+
 
 
 
