@@ -7,6 +7,7 @@ This project consists of one to many weather sensors based on an ESP32 control b
 - Pin connections for the ESP32 based sensors can be found below.
 - Detailed setup instructions for Raspberry Pi [can be found here](docs/rpiSetup.md)
 - Detailed setup instructions for Linux PC [can be found here](docs/ubuntuServerSetup.md)
+- Be sure to change the `NetworkName` and `NetworkPassword` palceholders in [the Indoor sketch](sketches/jonesBigAssWeatherStation_FreeRTOS_indoor_main.ino) and [the Outdoor sketch](sketches/jonesBigAssWeatherStation_FreeRTOS_outdoor.ino) to match your network.
 
 ## ESP32 / Pi Zero W weather station parts list:
 - Raspberry Pi Zero 2 W or PC running Linux (recommend Ubuntu Server)
@@ -43,5 +44,6 @@ This project consists of one to many weather sensors based on an ESP32 control b
 - GND → ESP32 GND
 - SCL → ESP32 GPIO22 (shared with others)
 - SDA → ESP32 GPIO21 (shared with others)
+
 
 
