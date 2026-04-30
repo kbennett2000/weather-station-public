@@ -1061,51 +1061,61 @@ Satellites: --"
         charts.ir.update();
       }
 
-      async function getData(url, retries = 2, timeout = 10000) {
-        // For direct device connections, use the proxy
-        if (url.includes("192.168.1.")) {
-          // Instead of direct connection:
-          // const fetchPromise = fetch(url);
+      async function getData(url, retries = 3, timeout = 8000) {
+        if (!url.includes("192.168.1.")) {
+          // Non-local URLs (if any)
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        }
 
-          // Use the proxy endpoint:
-          const fetchPromise = fetch(`/?url=${encodeURIComponent(url)}`);
+        // === Proxy path for local sensors ===
+        const proxyUrl = `/?url=${encodeURIComponent(url)}`;
+        let lastError;
 
-          let lastError;
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Request timed out")), timeout)
+            );
 
-          for (let attempt = 0; attempt <= retries; attempt++) {
-            try {
-              const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error("Request timed out")), timeout);
-              });
+            const response = await Promise.race([fetch(proxyUrl), timeoutPromise]);
 
-              const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-              const text = await response.text();
-              const sanitizedText = text
-                .replace(/"nan"/gi, "null")
-                .replace(/:\s*nan\s*([,}])/gi, ":null$1")
-                .replace(/:\s*undefined\s*([,}])/gi, ":null$1");
-
-              return JSON.parse(sanitizedText);
-            } catch (error) {
-              console.warn(`Attempt ${attempt + 1}/${retries + 1} failed for ${url}: ${error.message}`);
-              lastError = error;
-
-              if (attempt < retries) {
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+            if (!response.ok) {
+              // This is the key change — treat 5xx from proxy as "sensor down"
+              if (response.status >= 500) {
+                throw new Error(`Sensor unreachable (proxy 5xx)`);
               }
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const text = await response.text();
+            const sanitizedText = text
+              .replace(/"nan"/gi, "null")
+              .replace(/:\s*nan\s*([,}])/gi, ":null$1")
+              .replace(/:\s*undefined\s*([,}])/gi, ":null$1");
+
+            const data = JSON.parse(sanitizedText);
+
+            // Extra safety: if we got empty or obviously bad JSON
+            if (!data || typeof data !== "object") {
+              throw new Error("Invalid JSON response");
+            }
+
+            return data;
+
+          } catch (error) {
+            lastError = error;
+            console.warn(`Attempt ${attempt + 1}/${retries + 1} failed for ${url}: ${error.message}`);
+
+            if (attempt < retries) {
+              await new Promise(r => setTimeout(r, 1200)); // slight backoff
             }
           }
-
-          console.error("Failed to fetch data from:", url);
-          console.error("Original error:", lastError);
-          throw lastError;
-        } else {
-          // Use proxy for external URLs
-          return fetch(`/?url=${encodeURIComponent(url)}`);
         }
+
+        console.error(`All attempts failed for ${url}`, lastError);
+        throw lastError;   // This will be caught by your per-sensor try/catch in updateData
       }
 
       function calculateAbsoluteHumidity(temperatureC, relativeHumidity) {
@@ -1161,28 +1171,40 @@ Satellites: --"
         try {
 
           // Outdoor
+          var outdoor = 0;
+          var indoor = 0;
+          var basement = 0;
+
           try {
-            const outdoor = await getData("http://192.168.1.60/data");
+            outdoor = await getData("http://192.168.1.60/data");
           } catch (e) {
             console.warn("Outdoor sensor unavailable:", e);
+            outdoor = "Outdoor sensor unavailable";
             hadError = true;
           }
 
           // Indoor
           try {
-            const indoor = await getData("http://192.168.1.61/data");
+            indoor = await getData("http://192.168.1.61/data");
           } catch (e) {
             console.warn("Indoor sensor unavailable:", e);
+            indoor = "Indoor sensor unavailable";
             hadError = true;
           }
 
           // Basement
           try {
-            const basement = await getData("http://192.168.1.63/data");
+            basement = await getData("http://192.168.1.63/data");
           } catch (e) {
             console.warn("Basement sensor unavailable:", e);
+            basement = "Basement sensor unavailable";
             hadError = true;
           }
+
+
+          // const outdoor = await getData("http://192.168.1.60/data");
+          // const indoor = await getData("http://192.168.1.61/data");
+          // const basement = await getData("http://192.168.1.63/data");
 
           const gpsStatus = document.getElementById("gpsStatus");
           if (!gpsStatus) return;
