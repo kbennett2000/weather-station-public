@@ -1159,9 +1159,30 @@ Satellites: --"
         const errorDiv = document.getElementById("errorMessages");
 
         try {
-          const outdoor = await getData("http://192.168.1.60/data");
-          const indoor = await getData("http://192.168.1.61/data");
-          const basement = await getData("http://192.168.1.63/data");
+
+          // Outdoor
+          try {
+            const outdoor = await getData("http://192.168.1.60/data");
+          } catch (e) {
+            console.warn("Outdoor sensor unavailable:", e);
+            hadError = true;
+          }
+
+          // Indoor
+          try {
+            const indoor = await getData("http://192.168.1.61/data");
+          } catch (e) {
+            console.warn("Indoor sensor unavailable:", e);
+            hadError = true;
+          }
+
+          // Basement
+          try {
+            const basement = await getData("http://192.168.1.63/data");
+          } catch (e) {
+            console.warn("Basement sensor unavailable:", e);
+            hadError = true;
+          }
 
           const gpsStatus = document.getElementById("gpsStatus");
           if (!gpsStatus) return;
