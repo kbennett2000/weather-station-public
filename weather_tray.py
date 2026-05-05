@@ -13,6 +13,21 @@ from timezonefinder import TimezoneFinder
 from astral import LocationInfo
 from astral.sun import sun
 
+def ms_to_dhms(milliseconds: int) -> str:
+    # Convert to timedelta
+    td = timedelta(milliseconds=milliseconds)
+    
+    # Get total days and the remaining time
+    days = td.days
+    # Get hours, minutes, seconds from the time part
+    seconds = td.seconds
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    
+    return f"{days}d {hours:02d}hrs {minutes:02d}min {secs:02d}sec"
+
+
 tf = TimezoneFinder()
 
 # ====================== FULL SUNCALC PORT (exact translation of your original JS) ======================
@@ -373,6 +388,7 @@ class WeatherTray:
         lat = self.data.get("latitude")
         lon = self.data.get("longitude")
         sats = self.data.get("satellites")
+        uptime = self.data.get("uptime")
         tz = self.get_timezone(lat, lon)
         now = datetime.now(tz)
 
@@ -416,11 +432,12 @@ class WeatherTray:
             f"🌏 GPS: {lat:.5f}, {lon:.5f}\n"
             f"📡 Satellites: {sats} \n"
             f"🕓 Timezone: {tz.zone} ({now.strftime('%Z')})\n"
-            f"✅ Updated: {now.strftime('%H:%M:%S')}"
+            f"🤖 Uptime: {ms_to_dhms(uptime)}\n"
+            f"✅ Updated: {now.strftime('%H:%M:%S')}"            
         )
 
         self.details_label.set_markup(
-            '<span size="large" weight="bold">👨🏾📢Jones Big Ass Weather Widget🌦️🤖</span>\n' + details
+            '<span size="large" weight="bold">👨🏾📢Jones Big Ass Weather Widget🌦️⛱️</span>\n' + details
         )
         return False
 
