@@ -379,7 +379,7 @@ class WeatherTray:
         dewpoint_c = self.calculate_dew_point(tc, humidity)
         dew_str = f"🌧️ Dew Point: {dewpoint_c*9/5+32:.1f}°F / {dewpoint_c:.1f}°C\n" if dewpoint_c is not None else ""
 
-        self.indicator.set_label(f"🌡️ {tf_temp:.1f}°F", "home-weather-label")
+        self.indicator.set_label(f"🌡️ {tf_temp:.1f}°F / {tc:.1f}°C", "home-weather-label")
 
         altitude_m = self.data.get("altitude", 0)
         altitude_ft = altitude_m * 3.28084
