@@ -372,10 +372,11 @@ class WeatherTray:
         pressure_inhg = pressure_hpa * 0.029529983071
         lat = self.data.get("latitude")
         lon = self.data.get("longitude")
+        sats = self.data.get("satellites")
         tz = self.get_timezone(lat, lon)
         now = datetime.now(tz)
 
-        loc = LocationInfo("Home", "US", tz.zone, lat or 39.433235, lon or -104.518867)
+        loc = LocationInfo("Home", "US", tz.zone, lat or 0, lon or 0)
         sun_data = sun(loc.observer, date=now.date(), tzinfo=tz)
 
         moon_data = SunCalc.get_moon_illumination(now)
@@ -384,7 +385,7 @@ class WeatherTray:
         moon_icon = get_moon_icon(moon_phase_val)
         moon_phasename = get_moon_phasename(moon_phase_val)
 
-        moon_times = SunCalc.get_moon_times(now, lat or 39.433235, lon or -104.518867)
+        moon_times = SunCalc.get_moon_times(now, lat or 0, lon or 0)
         mr = moon_times.get("rise")
         ms = moon_times.get("set")
 
@@ -403,22 +404,23 @@ class WeatherTray:
             f"{dew_str}"
             f"💧 Humidity: {humidity:.1f}% ({abs_humidity:.1f} g/m³)\n"
             f"🌀 Pressure: {pressure_hpa} hPa ({pressure_inhg:.2f} inHg)\n"
-            f"💡 Light: {self.data.get('lux'):.2f} lux\n"
-            f"📶 WiFi: {self.data.get('rssi')} dBm\n"
-            f"🏔️ Altitude: {altitude_m:.1f} m / {altitude_ft:.1f} ft\n"
-            f"📍 GPS: {lat:.5f}, {lon:.5f}\n"
-            f"🌐 Timezone: {tz.zone} ({now.strftime('%Z')})\n\n"
+            f"🏔️ Altitude: {altitude_m:.1f} m / {altitude_ft:.1f} ft\n\n"
             f"🌅 Sunrise (Dawn): {sun_data['sunrise'].strftime('%I:%M %p')} ({sun_data['dawn'].strftime('%I:%M %p')})\n"
             f"☀️ Solar Noon: {sun_data['noon'].strftime('%I:%M %p')}\n"
-            f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%I:%M %p')} ({sun_data['dusk'].strftime('%I:%M %p')})\n\n"
+            f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%I:%M %p')} ({sun_data['dusk'].strftime('%I:%M %p')})\n"
             f"🌝 Moonrise: {moon_rise_str}\n"
             f"🌚 Moonset: {moon_set_str}\n"
             f"{moon_icon} {moon_phasename}: {illumination:.1f}%\n\n"
+            f"💡 Light: {self.data.get('lux'):.2f} lux\n"
+            f"📶 WiFi: {self.data.get('rssi')} dBm\n"            
+            f"🌏 GPS: {lat:.5f}, {lon:.5f}\n"
+            f"📡 Satellites: {sats} \n"
+            f"🕓 Timezone: {tz.zone} ({now.strftime('%Z')})\n"
             f"✅ Updated: {now.strftime('%I:%M:%S %p')}"
         )
 
         self.details_label.set_markup(
-            '<span size="large" weight="bold">👨🏾📣Jones Big Ass Weather Widget🌦️</span>\n' + details
+            '<span size="large" weight="bold">👨🏾📢Jones Big Ass Weather Widget🌦️🤖</span>\n' + details
         )
         return False
 
