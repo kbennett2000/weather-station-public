@@ -1,4 +1,4 @@
-# How to Setup the Weather Widget on Ubuntu Desktop
+# How to Setup the Jones Big Ass Weather Widget on Ubuntu Desktop
 
 ## Description
 The [Jones Big Ass Weather Widget](../weather_tray.py) displays sensor data from your Jones Big Ass Outdoor Weather Sensor. This instructions will show you how to install the widget in a Ubuntu Desktop (24.04) environment.
