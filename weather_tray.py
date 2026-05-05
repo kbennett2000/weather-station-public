@@ -18,6 +18,7 @@
 #    - Precise sunrise/sunset/dawn/dusk times (calculated with the astral library)
 #    - Full moon phase, illumination %, moonrise/moonset (using a complete port of the popular SunCalc JavaScript library)
 #    - Light level (lux), WiFi signal strength (RSSI), GPS coordinates, number of satellites, timezone, device uptime
+#    - NEW: Current sun & moon sky positions (azimuth + altitude), GPS in DMS format, Maidenhead grid square, day length, and time until sunrise/sunset
 # 4. Clicking the "details" menu item opens the sensor's web dashboard in your default browser.
 # 5. All times are automatically adjusted to the sensor's local timezone (detected via latitude/longitude using timezonefinder).
 # 6. The code includes a full, self-contained astronomy library (SunCalc port) for sun and moon calculations - no external API calls needed.
@@ -25,7 +26,7 @@
 #
 # WHY THIS IS USEFUL FOR FUTURE DEVELOPERS:
 # - Every single line is commented so you can understand exactly what each statement does.
-# - The SunCalc class is a faithful port of the popular JS library (https://github.com/mourner/suncalc) - you can extend it easily.
+# - The SunCalc class is a faithful port of the popular JS library[](https://github.com/mourner/suncalc) - you can extend it easily.
 # - Threading + GLib.idle_add pattern is the correct way to keep GTK responsive.
 # - Modular helper functions (dew point, absolute humidity, ms_to_dhms, moon icons) are clearly explained.
 # - You can easily change the sensor URL, add more sensors, or customize the menu.
@@ -569,6 +570,47 @@ def get_moon_phasename(phase):
     else: return "Waning Crescent"
     # Waning Crescent.
 
+# ====================== NEW HELPER: DECIMAL DEGREES TO DMS FORMAT ======================
+# This converts decimal degrees (e.g. 39.7392) into the classic GPS Degrees-Minutes-Seconds format
+# that real GPS units and old-school maps use. Example: 39° 44' 21.1" N
+def decimal_to_dms(deg, is_latitude=True):
+    # Takes a decimal degree value and a flag telling us if it's latitude or longitude.
+    # First we handle the sign for direction (N/S or E/W).
+    if is_latitude:
+        direction = "N" if deg >= 0 else "S"
+    else:
+        direction = "E" if deg >= 0 else "W"
+    # Work with absolute value so math is easier.
+    abs_deg = abs(deg)
+    # Whole degrees.
+    d = int(abs_deg)
+    # Minutes: take the fractional part, multiply by 60, take whole number.
+    m = int((abs_deg - d) * 60)
+    # Seconds: remaining fraction after minutes * 60, rounded to 1 decimal place.
+    s = round((abs_deg - d - m / 60.0) * 3600, 1)
+    # Return a 4-tuple so we can format it nicely later.
+    return d, m, s, direction
+
+# ====================== NEW HELPER: MAIDENHEAD GRID SQUARE ======================
+# Converts lat/lon into a 4- or 6-character Maidenhead locator (ham radio / APRS standard).
+# Example: Denver area = "DM79". Pure math, no extra libraries needed.
+def maidenhead(lat, lon):
+    # Convert to float just in case they come in as strings or None.
+    lat = float(lat) if lat is not None else 0.0
+    lon = float(lon) if lon is not None else 0.0
+    # A is the base letter for the 20-degree fields.
+    a = ord('A')
+    # Field (first two letters): 20-degree longitude and 10-degree latitude squares.
+    lon_idx = int((lon + 180) / 20)
+    lat_idx = int((lat + 90) / 10)
+    field = chr(a + lon_idx) + chr(a + lat_idx)
+    # Square (next two characters): 2-degree longitude and 1-degree latitude subsquares.
+    lon_rem = (lon + 180) % 20
+    lat_rem = (lat + 90) % 10
+    square = str(int(lon_rem / 2)) + str(int(lat_rem))
+    # Return the classic 4-character grid (you can extend to 6-char if you ever need sub-squares).
+    return field + square
+
 # ====================== MAIN WIDGET CLASS ======================
 class WeatherTray:
     # This is the main class that creates and manages the entire system tray weather widget.
@@ -772,6 +814,55 @@ class WeatherTray:
             moon_rise_str = "↓ Never rises"
             moon_set_str = "↓ Never sets"
 
+        # === NEW: Current sun and moon positions in the sky (azimuth + altitude) ===
+        # Uses the already-existing SunCalc class - no new dependencies!
+        # Azimuth is compass direction (0° = North, 90° = East, etc.)
+        # Altitude is angle above horizon (0° = horizon, 90° = straight up)
+        sun_pos = SunCalc.get_position(now, lat or 0, lon or 0)
+        moon_pos = SunCalc.get_moon_position(now, lat or 0, lon or 0)
+        
+        sun_az = math.degrees(sun_pos["azimuth"]) % 360
+        # Convert radians to degrees and keep in 0-360 range.
+        sun_alt = math.degrees(sun_pos["altitude"])
+        # Altitude in degrees.
+        moon_az = math.degrees(moon_pos["azimuth"]) % 360
+        # Same for moon.
+        moon_alt = math.degrees(moon_pos["altitude"])
+        # Moon altitude.
+        moon_dist_km = moon_pos["distance"]
+        # Distance from Earth center in km (fun extra info).
+
+        # === NEW: Day length + time until sunrise / sunset ===
+        # All times are already in the sensor's local timezone thanks to astral + tz.
+        day_length = (sun_data['sunset'] - sun_data['sunrise']).total_seconds() / 3600
+        # How many hours of daylight today (sunrise to sunset).
+        time_to_sunset = (sun_data['sunset'] - now).total_seconds() / 3600
+        # Positive = hours until sunset. Negative = hours since sunset.
+        if time_to_sunset >= 0:
+            sunset_status = f"Time to sunset: {time_to_sunset:.1f} hrs"
+        else:
+            sunset_status = f"Time since sunset: {abs(time_to_sunset):.1f} hrs"
+        
+        # Time to next sunrise (handles overnight case)
+        if time_to_sunset < 0:
+            # After sunset - calculate tomorrow's sunrise
+            next_sunrise = sun_data['sunrise'] + timedelta(days=1)
+            time_to_sunrise = (next_sunrise - now).total_seconds() / 3600
+            sunrise_status = f"Time to sunrise: {time_to_sunrise:.1f} hrs"
+        else:
+            sunrise_status = ""
+
+        # === NEW: GPS in DMS format + Maidenhead grid square ===
+        # These are the classic formats people expect from GPS devices.
+        if lat is not None and lon is not None:
+            lat_d, lat_m, lat_s, lat_dir = decimal_to_dms(lat, is_latitude=True)
+            lon_d, lon_m, lon_s, lon_dir = decimal_to_dms(lon, is_latitude=False)
+            dms_str = f"{lat_d}°{lat_m:02d}'{lat_s:04.1f}\"{lat_dir}  {lon_d}°{lon_m:02d}'{lon_s:04.1f}\"{lon_dir}"
+            grid_str = maidenhead(lat, lon)
+        else:
+            dms_str = "—"
+            grid_str = "—"
+
         details = (
             f"\n🌡️ Temp: {tf_temp:.1f}°F / {tc:.1f}°C\n"
             # Temperature line.
@@ -789,6 +880,16 @@ class WeatherTray:
             # Solar noon.
             f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%H:%M')} ({sun_data['dusk'].strftime('%H:%M')})\n"
             # Sunset and dusk.
+            f"📅 Day length: {day_length:.1f} hrs\n"
+            # NEW: Total daylight hours today.
+            f"⏳ {sunset_status}\n"
+            # NEW: Time to/ since sunset.
+            f"{sunrise_status}\n"
+            # NEW: Time to sunrise (only shown after sunset).
+            f"☀️ Sun now: Az {sun_az:.0f}°  Alt {sun_alt:.1f}°\n"
+            # NEW: Live sun position in the sky.
+            f"🌕 Moon now: Az {moon_az:.0f}°  Alt {moon_alt:.1f}°  ({moon_dist_km:.0f} km)\n\n"
+            # NEW: Live moon position + distance.
             f"🌝 Moonrise: {moon_rise_str}\n"
             # Moonrise.
             f"🌚 Moonset: {moon_set_str}\n"
@@ -800,7 +901,11 @@ class WeatherTray:
             f"📶 WiFi: {self.data.get('rssi')} dBm\n"
             # WiFi signal strength.
             f"🌏 GPS: {lat:.5f}, {lon:.5f}\n"
-            # GPS coordinates.
+            # Original decimal GPS.
+            f"🌍 GPS DMS: {dms_str}\n"
+            # NEW: Degrees-Minutes-Seconds format.
+            f"📡 Grid: {grid_str}\n"
+            # NEW: Maidenhead grid square (ham radio / APRS nerds love this).
             f"📡 Satellites: {sats} \n"
             # Number of satellites.
             f"🕓 Timezone: {tz.zone} ({now.strftime('%Z')})\n"
