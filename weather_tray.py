@@ -8,6 +8,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 import math
 import pytz
+import webbrowser                     # ← NEW: for opening the browser
 from timezonefinder import TimezoneFinder
 from astral import LocationInfo
 from astral.sun import sun
@@ -15,7 +16,6 @@ from astral.sun import sun
 tf = TimezoneFinder()
 
 # ====================== FULL SUNCALC PORT (exact translation of your original JS) ======================
-# All formulas, logic, and behavior are identical to the JavaScript library you posted.
 PI = math.pi
 sin = math.sin
 cos = math.cos
@@ -269,7 +269,7 @@ class SunCalc:
         return result
 
 
-# ====================== MOON ICON & PHASE NAME HELPERS (your original) ======================
+# ====================== MOON ICON & PHASE NAME HELPERS ======================
 def get_moon_icon(phase):
     if phase < 0.0625 or phase > 0.9375: return "🌑"
     elif phase < 0.1875: return "🌒"
@@ -291,7 +291,7 @@ def get_moon_phasename(phase):
     else: return "Waning Crescent"
 
 
-# ====================== MAIN WIDGET (updated) ======================
+# ====================== MAIN WIDGET (now with clickable details) ======================
 class WeatherTray:
     def __init__(self):
         self.indicator = AppIndicator3.Indicator.new(
@@ -303,6 +303,10 @@ class WeatherTray:
         self.details_label = Gtk.Label()
         self.details_item = Gtk.MenuItem()
         self.details_item.add(self.details_label)
+        
+        # ←←← NEW: Make the entire details section clickable
+        self.details_item.connect("activate", self.on_details_clicked)
+        
         self.menu.append(self.details_item)
         separator = Gtk.SeparatorMenuItem()
         self.menu.append(separator)
@@ -374,7 +378,6 @@ class WeatherTray:
         loc = LocationInfo("Home", "US", tz.zone, lat or 39.433235, lon or -104.518867)
         sun_data = sun(loc.observer, date=now.date(), tzinfo=tz)
 
-        # === Full accurate SunCalc port for Moon (illumination + rise/set) ===
         moon_data = SunCalc.get_moon_illumination(now)
         moon_phase_val = moon_data['phase']
         illumination = moon_data['fraction'] * 100
@@ -408,9 +411,9 @@ class WeatherTray:
             f"🌅 Sunrise (Dawn): {sun_data['sunrise'].strftime('%I:%M %p')} ({sun_data['dawn'].strftime('%I:%M %p')})\n"
             f"☀️ Solar Noon: {sun_data['noon'].strftime('%I:%M %p')}\n"
             f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%I:%M %p')} ({sun_data['dusk'].strftime('%I:%M %p')})\n\n"
-            f"🌝 Moonrise: {moon_rise_str}\n"
-            f"🌚︎ Moonset: {moon_set_str}\n"
-            f"{moon_icon} {moon_phasename}: {illumination:.1f}%\n"
+            f"🌙 Moonrise: {moon_rise_str}    Moonset: {moon_set_str}\n"
+            f"{moon_icon} {moon_phasename}: {illumination:.1f}%\n\n"
+            f"<span foreground='#aaaaaa' size='small'>Click anywhere here to open dashboard</span>\n"
             f"✅ Updated: {now.strftime('%I:%M:%S %p')}"
         )
 
@@ -418,6 +421,11 @@ class WeatherTray:
             '<span size="large" weight="bold">👨🏾📣Jones Big Ass Weather Widget🌦️</span>\n' + details
         )
         return False
+
+    # ←←← NEW: Click handler for the details section
+    def on_details_clicked(self, menuitem):
+        """Open the sensor web dashboard when the details menu item is clicked"""
+        webbrowser.open("http://192.168.1.62")
 
     def calculate_absolute_humidity(self, temp_c, rh):
         if temp_c is None or rh is None:
