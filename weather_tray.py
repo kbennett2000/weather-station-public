@@ -368,7 +368,7 @@ class WeatherTray:
     def _update_ui(self, success):
         if not success or not self.data:
             self.indicator.set_label("🌡️ -- °F", "home-weather-label")
-            self.details_label.set_markup('<span size="large" weight="bold">JONES BIG ASS WEATHER WIDGET</span>\n❌ Sensor offline')
+            self.details_label.set_markup('<span size="large" weight="bold">👨🏾📢Jones Big Ass Weather Widget🌦️⛱️</span>\n\n❌ ❌ ❌ DEVICE OFFLINE ❌ ❌ ❌')
             return False
 
         tf_temp = self.data.get("temperatureF", 0)
