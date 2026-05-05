@@ -13,6 +13,7 @@ import pytz
 from timezonefinder import TimezoneFinder
 from astral import LocationInfo
 from astral.sun import sun
+from astral import moon
 
 tf = TimezoneFinder()
 
@@ -86,7 +87,6 @@ def get_moon_icon(phase):
     elif phase < 0.6875: return "🌖"
     elif phase < 0.8125: return "🌗"
     else: return "🌘"
-
 
 # Moon phasename helper
 def get_moon_phasename(phase):
@@ -195,8 +195,18 @@ class WeatherTray:
         moon_icon = get_moon_icon(moon_phase_val)
         moon_phasename = get_moon_phasename(moon_phase_val)
 
+        # Moonrise and Moonset
+        try:
+            moon_rise = moon.moonrise(now, lat, lon)
+            moon_set = moon.moonset(now, lat, lon)
+            moonrise_str = moon_rise.strftime("%I:%M %p") if moon_rise else "--"
+            moonset_str = moon_set.strftime("%I:%M %p") if moon_set else "--"
+        except:
+            moonrise_str = "--"
+            moonset_str = "--"
+
         details = (
-            f"🌡️ Temp: {tf:.1f}°F / {tc:.1f}°C\n"
+            f"\n🌡️ Temp: {tf:.1f}°F / {tc:.1f}°C\n"
             f"💧 Humidity: {humidity:.1f}% ({abs_humidity:.1f} g/m³)\n"
             f"🌀 Pressure: {pressure_hpa} hPa ({pressure_inhg:.2f} inHg)\n"
             f"💡 Light: {self.data.get('lux'):.2f} lux\n"
@@ -207,13 +217,14 @@ class WeatherTray:
             f"🌅 Sunrise (Dawn): {sun_data['sunrise'].strftime('%I:%M %p')} ({sun_data['dawn'].strftime('%I:%M %p')})\n"
             f"☀️ Solar Noon: {sun_data['noon'].strftime('%I:%M %p')}\n"
             f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%I:%M %p')} ({sun_data['dusk'].strftime('%I:%M %p')})\n\n"
-            #f"{moon_icon} Moon Phase (Illum): {moon_phasename} - {moon_phase_val:.2f} ({illumination:.1f}%)\n"
+            #f"🌑 Moonrise: {moonrise_str}\n"
+            #f"🌕 Moonset: {moonset_str}\n"
             f"{moon_icon} {moon_phasename}: {illumination:.1f}%\n"
             f"✅ Updated: {now.strftime('%I:%M:%S %p')}"
         )
 
         self.details_label.set_markup(
-            '<span size="large" weight="bold">👨🏾📣JONES BIG ASS WEATHER WIDGET🌎</span>\n' + details
+            '<span size="large" weight="bold">👨🏾📣JONES BIG ASS WEATHER WIDGET🌩️⚡🌎</span>\n' + details
         )
         return False
 
@@ -227,4 +238,3 @@ class WeatherTray:
 if __name__ == "__main__":
     WeatherTray()
     Gtk.main()
-EOF
