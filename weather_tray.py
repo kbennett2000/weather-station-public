@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # This shebang line specifies that the script should be executed using the Python 3 interpreter (whichever 'python3' is in the user's PATH).
 
-# =============================================================================
-# JONES BIG ASS WEATHER WIDGET - FULLY COMMENTED EDITION
-# =============================================================================
+# =============================
+# JONES BIG ASS WEATHER WIDGET 
+# =============================
+# FOR INSTALLATION INSTRUCTIONS PLEASE SEE [howToUseWeatherTray_Ubuntu.md](./docs/howToUseWeatherTray_Ubuntu.md) IN THE DOCS FOLDER OF THIS REPO!
 #
 # WHAT THIS SCRIPT DOES:
 # This is a complete Linux system tray (AppIndicator) weather widget built with GTK3 and AppIndicator3.
