@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('AppIndicator3', '0.1')
@@ -14,12 +13,10 @@ from timezonefinder import TimezoneFinder
 from astral import LocationInfo
 from astral.sun import sun
 from astral import moon
-
 tf = TimezoneFinder()
 
 # ==================== Exact suncalc.js Moon Illumination ====================
 def to_days(date):
-    # Matches suncalc.js exactly
     return (date.timestamp() / 86400) - 0.5 + 2440588 - 2451545
 
 def right_ascension(l, b):
@@ -68,14 +65,13 @@ def get_moon_illumination(date):
     angle = math.atan2(math.cos(s['dec']) * math.sin(s['ra'] - m['ra']),
                        math.sin(s['dec']) * math.cos(m['dec']) -
                        math.cos(s['dec']) * math.sin(m['dec']) * math.cos(s['ra'] - m['ra']))
-
     return {
         'fraction': (1 + math.cos(inc)) / 2,
         'phase': 0.5 + (0.5 * inc * (-1 if angle < 0 else 1)) / math.pi,
         'angle': angle
     }
 
-e = math.radians(23.4397)   # obliquity of Earth
+e = math.radians(23.4397)  # obliquity of Earth
 
 # Moon icon helper
 def get_moon_icon(phase):
@@ -99,7 +95,6 @@ def get_moon_phasename(phase):
     elif phase < 0.8125: return "Last Quarter"
     else: return "Waning Crescent"
 
-
 class WeatherTray:
     def __init__(self):
         self.indicator = AppIndicator3.Indicator.new(
@@ -109,27 +104,20 @@ class WeatherTray:
         )
         self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
         self.indicator.set_label("🌡️ -- °F", "home-weather-label")
-
         self.menu = Gtk.Menu()
-
         self.details_label = Gtk.Label()
         self.details_item = Gtk.MenuItem()
         self.details_item.add(self.details_label)
         self.menu.append(self.details_item)
-
         separator = Gtk.SeparatorMenuItem()
         self.menu.append(separator)
-
         quit_item = Gtk.MenuItem(label="Quit")
         quit_item.connect("activate", lambda x: Gtk.main_quit())
         self.menu.append(quit_item)
-
         self.menu.show_all()
         self.indicator.set_menu(self.menu)
-
         self.url = "http://192.168.1.60/data"
         self.data = {}
-
         GLib.timeout_add_seconds(30, self.update)
         self.update()
 
@@ -173,21 +161,25 @@ class WeatherTray:
         humidity = self.data.get("humidity", 0)
         pressure_hpa = self.data.get("pressure", 0)
 
-        self.indicator.set_label(f"🌡️ {tf:.1f}°F", "home-weather-label")
+        # === NEW: Dew point calculation ===
+        dewpoint_c = self.calculate_dew_point(tc, humidity)
+        if dewpoint_c is not None:
+            dewpoint_f = dewpoint_c * 9/5 + 32
+            dew_str = f"🌧️ Dew Point: {dewpoint_f:.1f}°F / {dewpoint_c:.1f}°C\n"
+        else:
+            dew_str = ""
 
+        self.indicator.set_label(f"🌡️ {tf:.1f}°F", "home-weather-label")
         altitude_m = self.data.get("altitude", 0)
         altitude_ft = altitude_m * 3.28084
         abs_humidity = self.calculate_absolute_humidity(tc, humidity)
         pressure_inhg = pressure_hpa * 0.029529983071
-
         lat = self.data.get("latitude")
         lon = self.data.get("longitude")
         tz = self.get_timezone(lat, lon)
         now = datetime.now(tz)
-
         loc = LocationInfo("Home", "US", tz.zone, lat or 39.433235, lon or -104.518867)
         sun_data = sun(loc.observer, date=now.date(), tzinfo=tz)
-
         # Exact suncalc.js moon calculation
         moon_data = get_moon_illumination(now)
         moon_phase_val = moon_data['phase']
@@ -195,18 +187,9 @@ class WeatherTray:
         moon_icon = get_moon_icon(moon_phase_val)
         moon_phasename = get_moon_phasename(moon_phase_val)
 
-        # Moonrise and Moonset
-        try:
-            moon_rise = moon.moonrise(now, lat, lon)
-            moon_set = moon.moonset(now, lat, lon)
-            moonrise_str = moon_rise.strftime("%I:%M %p") if moon_rise else "--"
-            moonset_str = moon_set.strftime("%I:%M %p") if moon_set else "--"
-        except:
-            moonrise_str = "--"
-            moonset_str = "--"
-
         details = (
             f"\n🌡️ Temp: {tf:.1f}°F / {tc:.1f}°C\n"
+            f"{dew_str}"                                      # ← dew point inserted here
             f"💧 Humidity: {humidity:.1f}% ({abs_humidity:.1f} g/m³)\n"
             f"🌀 Pressure: {pressure_hpa} hPa ({pressure_inhg:.2f} inHg)\n"
             f"💡 Light: {self.data.get('lux'):.2f} lux\n"
@@ -217,14 +200,11 @@ class WeatherTray:
             f"🌅 Sunrise (Dawn): {sun_data['sunrise'].strftime('%I:%M %p')} ({sun_data['dawn'].strftime('%I:%M %p')})\n"
             f"☀️ Solar Noon: {sun_data['noon'].strftime('%I:%M %p')}\n"
             f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%I:%M %p')} ({sun_data['dusk'].strftime('%I:%M %p')})\n\n"
-            #f"🌑 Moonrise: {moonrise_str}\n"
-            #f"🌕 Moonset: {moonset_str}\n"
             f"{moon_icon} {moon_phasename}: {illumination:.1f}%\n"
             f"✅ Updated: {now.strftime('%I:%M:%S %p')}"
         )
-
         self.details_label.set_markup(
-            '<span size="large" weight="bold">👨🏾📣JONES BIG ASS WEATHER WIDGET🌩️⚡🌎</span>\n' + details
+            '<span size="large" weight="bold">👨🏾📣Jones Big Ass Weather Widget🌦️</span>\n' + details
         )
         return False
 
@@ -234,6 +214,20 @@ class WeatherTray:
         svp = 6.112 * math.exp((17.67 * temp_c) / (temp_c + 243.5))
         abs_humidity = (svp * rh * 2.1674) / (273.15 + temp_c)
         return abs_humidity
+
+    # ==================== NEW METHOD ====================
+    def calculate_dew_point(self, temp_c, rh):
+        """Calculate dew point temperature (°C) using Magnus formula
+        (same constants as your absolute humidity calculation)"""
+        if temp_c is None or rh is None or rh <= 0 or rh > 100:
+            return None
+        try:
+            # Exact inverse of the SVP formula you already use
+            alpha = math.log(rh / 100.0) + (17.67 * temp_c) / (temp_c + 243.5)
+            dewpoint_c = (243.5 * alpha) / (17.67 - alpha)
+            return dewpoint_c
+        except:
+            return None
 
 if __name__ == "__main__":
     WeatherTray()
