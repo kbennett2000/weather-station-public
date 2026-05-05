@@ -16,7 +16,7 @@ from astral.sun import sun
 def ms_to_dhms(milliseconds: int) -> str:
     # Convert to timedelta
     td = timedelta(milliseconds=milliseconds)
-    
+
     # Get total days and the remaining time
     days = td.days
     # Get hours, minutes, seconds from the time part
@@ -420,7 +420,7 @@ class WeatherTray:
             f"{dew_str}"
             f"💧 Humidity: {humidity:.1f}% ({abs_humidity:.1f} g/m³)\n"
             f"🌀 Pressure: {pressure_hpa} hPa ({pressure_inhg:.2f} inHg)\n"
-            f"🏔️ Altitude: {altitude_m:.1f} m / {altitude_ft:.1f} ft\n\n"
+            f"🏔️ Altitude: {altitude_ft:.1f} ft / {altitude_m:.1f} m\n\n"
             f"🌅 Sunrise (Dawn): {sun_data['sunrise'].strftime('%H:%M')} ({sun_data['dawn'].strftime('%H:%M')})\n"
             f"☀️ Solar Noon: {sun_data['noon'].strftime('%H:%M')}\n"
             f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%H:%M')} ({sun_data['dusk'].strftime('%H:%M')})\n"
