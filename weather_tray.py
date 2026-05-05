@@ -4,7 +4,7 @@
 # =============================
 # JONES BIG ASS WEATHER WIDGET 
 # =============================
-# FOR INSTALLATION INSTRUCTIONS PLEASE SEE [howToUseWeatherTray_Ubuntu.md](./docs/howToUseWeatherTray_Ubuntu.md) IN THE DOCS FOLDER OF THIS REPO!
+# FOR INSTALLATION INSTRUCTIONS PLEASE SEE howToUseWeatherTray_Ubuntu.md IN THE DOCS FOLDER OF THIS REPO!
 #
 # WHAT THIS SCRIPT DOES:
 # This is a complete Linux system tray (AppIndicator) weather widget built with GTK3 and AppIndicator3.
