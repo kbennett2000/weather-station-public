@@ -411,9 +411,9 @@ class WeatherTray:
             f"🌅 Sunrise (Dawn): {sun_data['sunrise'].strftime('%I:%M %p')} ({sun_data['dawn'].strftime('%I:%M %p')})\n"
             f"☀️ Solar Noon: {sun_data['noon'].strftime('%I:%M %p')}\n"
             f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%I:%M %p')} ({sun_data['dusk'].strftime('%I:%M %p')})\n\n"
-            f"🌙 Moonrise: {moon_rise_str}    Moonset: {moon_set_str}\n"
+            f"🌝 Moonrise: {moon_rise_str}\n"
+            f"🌚 Moonset: {moon_set_str}\n"
             f"{moon_icon} {moon_phasename}: {illumination:.1f}%\n\n"
-            f"<span foreground='#aaaaaa' size='small'>Click anywhere here to open dashboard</span>\n"
             f"✅ Updated: {now.strftime('%I:%M:%S %p')}"
         )
 
