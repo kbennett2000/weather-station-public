@@ -389,8 +389,8 @@ class WeatherTray:
         mr = moon_times.get("rise")
         ms = moon_times.get("set")
 
-        moon_rise_str = mr.astimezone(tz).strftime('%I:%M %p') if mr else "—"
-        moon_set_str = ms.astimezone(tz).strftime('%I:%M %p') if ms else "—"
+        moon_rise_str = mr.astimezone(tz).strftime('%H:%M') if mr else "—"
+        moon_set_str = ms.astimezone(tz).strftime('%H:%M') if ms else "—"
 
         if "alwaysUp" in moon_times:
             moon_rise_str = "↑ Always up"
@@ -405,9 +405,9 @@ class WeatherTray:
             f"💧 Humidity: {humidity:.1f}% ({abs_humidity:.1f} g/m³)\n"
             f"🌀 Pressure: {pressure_hpa} hPa ({pressure_inhg:.2f} inHg)\n"
             f"🏔️ Altitude: {altitude_m:.1f} m / {altitude_ft:.1f} ft\n\n"
-            f"🌅 Sunrise (Dawn): {sun_data['sunrise'].strftime('%I:%M %p')} ({sun_data['dawn'].strftime('%I:%M %p')})\n"
-            f"☀️ Solar Noon: {sun_data['noon'].strftime('%I:%M %p')}\n"
-            f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%I:%M %p')} ({sun_data['dusk'].strftime('%I:%M %p')})\n"
+            f"🌅 Sunrise (Dawn): {sun_data['sunrise'].strftime('%H:%M')} ({sun_data['dawn'].strftime('%H:%M')})\n"
+            f"☀️ Solar Noon: {sun_data['noon'].strftime('%H:%M')}\n"
+            f"🌇 Sunset (Dusk): {sun_data['sunset'].strftime('%H:%M')} ({sun_data['dusk'].strftime('%H:%M')})\n"
             f"🌝 Moonrise: {moon_rise_str}\n"
             f"🌚 Moonset: {moon_set_str}\n"
             f"{moon_icon} {moon_phasename}: {illumination:.1f}%\n\n"
@@ -416,7 +416,7 @@ class WeatherTray:
             f"🌏 GPS: {lat:.5f}, {lon:.5f}\n"
             f"📡 Satellites: {sats} \n"
             f"🕓 Timezone: {tz.zone} ({now.strftime('%Z')})\n"
-            f"✅ Updated: {now.strftime('%I:%M:%S %p')}"
+            f"✅ Updated: {now.strftime('%H:%M:%S')}"
         )
 
         self.details_label.set_markup(
