@@ -71,113 +71,38 @@ void displayMessage(String message)
     xSemaphoreGive(i2cMutex);
 }
 
+// Emit a float as JSON, substituting "null" for NaN. Without this, ESP32's
+// String(NaN) prints the literal text "nan", which is not valid JSON and
+// breaks parsers downstream. This is BUG-08 fixed at the source — the
+// server's wire_format.py keeps a defense-in-depth regex for old firmware
+// that still emits "nan", but new sketches must emit clean JSON.
+static String floatJson(float v, unsigned int decimals = 2)
+{
+    if (isnan(v))
+    {
+        return String("null");
+    }
+    return String(v, decimals);
+}
+
 void handleRoot()
 {
-    String html = R"html(
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Jones Big Ass Indoor Jr Weather Station</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta charset="UTF-8">
-    <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            margin: 20px;
-            background-color: #f0f0f0;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .card {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .value {
-            font-size: 28px;
-            font-weight: bold;
-            color: #2196F3;
-            margin: 10px 0;
-        }
-        .label {
-            color: #666;
-            font-size: 18px;
-            margin-bottom: 10px;
-            font-weight: 500;
-        }
-        .historical {
-            font-size: 16px;
-            color: #666;
-            margin-top: 10px;
-            padding: 5px 0;
-            border-top: 1px solid #eee;
-        }
-        .timestamp {
-            font-size: 14px;
-            color: #999;
-            text-align: right;
-            margin-top: 10px;
-        }
-    </style>
-    <script>
-        function updateData() {
-            fetch('/data')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('tempC').textContent = data.temperatureC.toFixed(1) + '°C';
-                    document.getElementById('tempF').textContent = data.temperatureF.toFixed(1) + '°F';
-                    document.getElementById('humidity').textContent = data.humidity.toFixed(1) + '%';
-                    document.getElementById('pressure').textContent = data.pressure.toFixed(1) + ' hPa';
-                    document.getElementById('timestamp').textContent = new Date().toLocaleString();
-                });
-        }
-        
-        setInterval(updateData, 5000);
-        updateData();
-    </script>
-</head>
-<body>
-    <h1>Jones Big Ass Indoor Jr Weather Station</h1>
-    
-    <div class="card">
-        <div class="label">Temperature</div>
-        <div class="value" id="tempC">--°C</div>
-        <div class="value" id="tempF">--°F</div>
-        <div class="timestamp">Last updated: <span id="timestamp">--</span></div>
-    </div>
-    
-    <div class="card">
-        <div class="label">Humidity</div>
-        <div class="value" id="humidity">--%</div>
-    </div>
-    
-    <div class="card">
-        <div class="label">Pressure</div>
-        <div class="value" id="pressure">-- hPa</div>
-    </div>
-
-</body>
-</html>
-)html";
-    server.send(200, "text/html", html);
+    // The inline HTML status page was removed during Phase 5 cleanup —
+    // the new dashboard at the FastAPI server is the canonical UI. This
+    // endpoint stays so curl / browser pokes get something readable.
+    server.send(200, "text/plain", "Jones Big Ass Indoor Jr Sensor — see /data for JSON\n");
 }
 
 void handleData()
 {
     xSemaphoreTake(dataMutex, portMAX_DELAY);
+    // floatJson() guards every reading — see helper above and BUG-08
+    // notes in the server's wire_format.py.
     String json = "{";
-    json += "\"temperatureC\":" + String(sensorData.temperatureC) + ",";
-    json += "\"temperatureF\":" + String(sensorData.temperatureF) + ",";
-    json += "\"humidity\":" + String(sensorData.humidity) + ",";
-    json += "\"pressure\":" + String(sensorData.pressure);
+    json += "\"temperatureC\":" + floatJson(sensorData.temperatureC) + ",";
+    json += "\"temperatureF\":" + floatJson(sensorData.temperatureF) + ",";
+    json += "\"humidity\":" + floatJson(sensorData.humidity) + ",";
+    json += "\"pressure\":" + floatJson(sensorData.pressure);
     json += "}";
     xSemaphoreGive(dataMutex);
 

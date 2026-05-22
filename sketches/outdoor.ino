@@ -118,182 +118,28 @@ void checkWiFiConnection()
     }
 }
 
-void handleSetOffset()
+// Emit a float as JSON, substituting "null" for NaN. Without this, ESP32's
+// String(NaN) prints the literal text "nan", which is not valid JSON and
+// breaks parsers downstream. This is BUG-08 fixed at the source — the
+// server's wire_format.py keeps a defense-in-depth regex for old firmware
+// that still emits "nan", but new sketches must emit clean JSON.
+static String floatJson(float v, unsigned int decimals = 2)
 {
-    if (xSemaphoreTake(tempOffsetMutex, pdMS_TO_TICKS(5000)) != pdTRUE)
+    if (isnan(v))
     {
-        server.send(503, "text/plain", "Server busy");
-        return;
+        return String("null");
     }
-
-    if (server.hasArg("value"))
-    {
-        TEMP_OFFSET = server.arg("value").toFloat();
-        server.send(200, "text/plain", "OK");
-    }
-    else
-    {
-        server.send(400, "text/plain", "Missing value");
-    }
-    xSemaphoreGive(tempOffsetMutex);
+    return String(v, decimals);
 }
 
 void handleRoot()
 {
-    String html = R"html(
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Jones Big Ass Outdoor Weather Station</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta charset="UTF-8">
-    <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            margin: 20px;
-            background-color: #f0f0f0;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .card {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .value {
-            font-size: 28px;
-            font-weight: bold;
-            color: #2196F3;
-            margin: 10px 0;
-        }
-        .label {
-            color: #666;
-            font-size: 18px;
-            margin-bottom: 10px;
-            font-weight: 500;
-        }
-        .timestamp {
-            font-size: 14px;
-            color: #999;
-            text-align: right;
-            margin-top: 10px;
-        }
-        .status {
-            font-size: 14px;
-            color: #666;
-            margin-top: 10px;
-        }
-    </style>
-    <script>
-        function setOffset() {
-            const value = document.getElementById('tempOffset').value;
-            fetch('/setOffset?value=' + value)
-                .then(response => {
-                    if(response.ok) {
-                        alert('Offset updated');
-                        updateData();
-                    }
-                });
-        }
-        function updateData() {
-            fetch('/data')
-                .then(response => response.json())
-                .then(data => {
-                    if(data.error) {
-                        document.getElementById('error').textContent = data.error;
-                        return;
-                    }
-                    document.getElementById('tempC').textContent = data.temperatureC.toFixed(1) + '°C';
-                    document.getElementById('tempF').textContent = data.temperatureF.toFixed(1) + '°F';
-                    document.getElementById('humidity').textContent = data.humidity.toFixed(1) + '%';
-                    document.getElementById('pressure').textContent = data.pressure.toFixed(1) + ' hPa';
-                    document.getElementById('lux').textContent = data.lux.toFixed(1) + ' lux';
-                    document.getElementById('ir').textContent = data.ir + ' IR';
-                    document.getElementById('visible').textContent = data.visible + ' Visible';
-                    document.getElementById('lat').textContent = data.latitude.toFixed(6) + '°';
-                    document.getElementById('lon').textContent = data.longitude.toFixed(6) + '°';
-                    document.getElementById('alt').textContent = data.altitude.toFixed(1) + ' m';
-                    document.getElementById('spd').textContent = data.speed.toFixed(1) + ' km/h';
-                    document.getElementById('satellites').textContent = data.satellites;
-                    document.getElementById('rssi').textContent = data.rssi + ' dBm';
-                    document.getElementById('uptime').textContent = Math.floor(data.uptime / 1000) + ' seconds';
-                    document.getElementById('heap').textContent = data.freeHeap + ' bytes';                    
-                    document.getElementById('timestamp').textContent = new Date().toLocaleString();
-                    document.getElementById('tempOffset').value = data.tempOffset;
-                    document.getElementById('error').textContent = '';
-                });
-        }
-        
-        setInterval(updateData, 5000);
-        updateData();
-    </script>
-</head>
-<body>
-    <h1>Jones Big Ass Outdoor Weather Station</h1>
-    
-    <div id="error" style="color: red; text-align: center;"></div>
-    
-    <div class="card">
-        <div class="label">Temperature</div>
-        <div class="value" id="tempC">--°C</div>
-        <div class="value" id="tempF">--°F</div>
-    </div>
-    
-    <div class="card">
-        <div class="label">Humidity</div>
-        <div class="value" id="humidity">--%</div>
-    </div>
-    
-    <div class="card">
-        <div class="label">Pressure</div>
-        <div class="value" id="pressure">-- hPa</div>
-    </div>
-
-    <div class="card">
-        <div class="label">Light</div>
-        <div class="value" id="lux">-- lux</div>
-        <div class="value" id="ir">-- IR</div>
-        <div class="value" id="visible">-- Visible</div>
-    </div>
-
-    <div class="card">
-        <div class="label">Location</div>
-        <div class="value" id="lat">--°</div>
-        <div class="value" id="lon">--°</div>
-        <div class="value" id="alt">-- m</div>
-        <div class="value" id="spd">-- km/h</div>
-        <div class="value">Satellites: <span id="satellites">--</span></div>
-    </div>
-
-    <div class="card">
-        <div class="label">Temperature Offset</div>
-        <div class="value">
-            <input type="number" id="tempOffset" step="0.1" style="width: 100px;">
-            <button onclick="setOffset()">Update</button>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="label">System Status</div>
-        <div class="status">WiFi Signal: <span id="rssi">--</span></div>
-        <div class="status">Uptime: <span id="uptime">--</span></div>
-        <div class="status">Free Memory: <span id="heap">--</span></div>
-    </div>
-
-    <div class="timestamp">Last updated: <span id="timestamp">--</span></div>
-</body>
-</html>
-)html";
-    server.send(200, "text/html", html);
+    // The inline HTML status page was removed during Phase 5 cleanup —
+    // the new dashboard at the FastAPI server is the canonical UI. This
+    // endpoint stays so curl / browser pokes get something readable.
+    server.send(200, "text/plain", "Jones Big Ass Outdoor Sensor — see /data for JSON\n");
 }
+
 
 void handleData()
 {
@@ -306,20 +152,24 @@ void handleData()
     String json = "{";
     if (sensorData.validData)
     {
-        json += "\"temperatureC\":" + String(sensorData.temperatureC) + ",";
-        json += "\"temperatureF\":" + String(sensorData.temperatureF) + ",";
-        json += "\"humidity\":" + String(sensorData.humidity) + ",";
-        json += "\"pressure\":" + String(sensorData.pressure) + ",";
-        json += "\"lux\":" + String(sensorData.lux) + ",";
+        // Every float field goes through floatJson() so a NaN reading
+        // (e.g. GPS losing lock mid-cycle, TSL2591 read failure) emits
+        // valid JSON "null" instead of the invalid literal "nan".
+        // ints stay as String() since they can't be NaN.
+        json += "\"temperatureC\":" + floatJson(sensorData.temperatureC) + ",";
+        json += "\"temperatureF\":" + floatJson(sensorData.temperatureF) + ",";
+        json += "\"humidity\":" + floatJson(sensorData.humidity) + ",";
+        json += "\"pressure\":" + floatJson(sensorData.pressure) + ",";
+        json += "\"lux\":" + floatJson(sensorData.lux) + ",";
         json += "\"ir\":" + String(sensorData.ir) + ",";
         json += "\"visible\":" + String(sensorData.visible) + ",";
-        json += "\"latitude\":" + String(sensorData.latitude, 6) + ",";
-        json += "\"longitude\":" + String(sensorData.longitude, 6) + ",";
-        json += "\"altitude\":" + String(sensorData.altitude) + ",";
-        json += "\"speed\":" + String(sensorData.speed) + ",";
-        json += "\"course\":" + String(sensorData.course) + ",";
+        json += "\"latitude\":" + floatJson(sensorData.latitude, 6) + ",";
+        json += "\"longitude\":" + floatJson(sensorData.longitude, 6) + ",";
+        json += "\"altitude\":" + floatJson(sensorData.altitude) + ",";
+        json += "\"speed\":" + floatJson(sensorData.speed) + ",";
+        json += "\"course\":" + floatJson(sensorData.course) + ",";
         json += "\"satellites\":" + String(sensorData.satellites) + ",";
-        json += "\"tempOffset\":" + String(TEMP_OFFSET) + ",";
+        json += "\"tempOffset\":" + floatJson(TEMP_OFFSET) + ",";
         json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
         json += "\"uptime\":" + String(millis()) + ",";
         json += "\"freeHeap\":" + String(ESP.getFreeHeap());
@@ -679,7 +529,6 @@ void setup()
 
     server.on("/", handleRoot);
     server.on("/data", handleData);
-    server.on("/setOffset", handleSetOffset);
     server.begin();
 
     Serial.println("HTTP server started");

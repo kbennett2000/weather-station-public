@@ -1,16 +1,16 @@
 """ESP32 /data wire format → internal SensorPayload adapter.
 
-The sketches (sketches/jonesBigAssWeatherStation_FreeRTOS_*.ino) emit
-JSON-shaped strings by string-concatenating field names with
-String(<float>) values. Two notable wire-format quirks the adapter
-absorbs:
+The sketches (sketches/{outdoor,indoor,basement}.ino) emit JSON-shaped
+strings by string-concatenating field names with String(<float>) values.
+Two notable wire-format quirks the adapter absorbs:
 
 1. **`nan` text instead of valid JSON null** (BUG-08 in the findings
    doc). When the underlying sensor reading is NaN, the Arduino
    String(float) conversion emits the literal text "nan", which is not
-   valid JSON. The adapter sanitizes bare `nan` and `undefined` tokens
-   to `null` before parsing. The proper fix lives in Phase 5 (ESP32
-   sketch cleanup); until then, this is the workaround.
+   valid JSON. Phase 5 fixed this at source: the new sketches route
+   every float through a `floatJson()` helper that emits `null` for
+   NaN. The sanitizer here stays as defense-in-depth for any ESP32
+   still running pre-Phase-5 firmware that hasn't been reflashed.
 
 2. **Field-name and unit differences vs. the internal SensorPayload.**
    The wire format uses `temperatureC`, `humidity`, `pressure` (hPa),

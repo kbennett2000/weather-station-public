@@ -88,7 +88,7 @@ If you want to know what the weather is doing at your house **right now**, what 
 
 ## Configuration
 
-Before flashing the sketches, change the `NetworkName` and `NetworkPassword` placeholders in [the indoor sketch](sketches/jonesBigAssWeatherStation_FreeRTOS_indoor_main.ino) and [the outdoor sketch](sketches/jonesBigAssWeatherStation_FreeRTOS_outdoor.ino) to match your WiFi network.
+Before flashing the sketches, change the `NetworkName` and `NetworkPassword` placeholders in [the outdoor sketch](sketches/outdoor.ino), [the indoor sketch](sketches/indoor.ino), and [the basement sketch](sketches/basement.ino) to match your WiFi network.
 
 The default outdoor sensor IP is `192.168.1.60`. If you use a different address, update it in the sketch and in the logger scripts.
 

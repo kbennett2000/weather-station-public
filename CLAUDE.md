@@ -99,7 +99,8 @@ weather-station-public/
 │   └── config.toml.example
 ├── sketches/                    # ESP32 firmware (cleanup only, not rebuild)
 │   ├── outdoor.ino
-│   └── indoor.ino
+│   ├── indoor.ino
+│   └── basement.ino
 └── install.sh
 ```
 
@@ -140,7 +141,9 @@ Python GTK tray widget reads from the API instead of polling the sensor directly
 
 ### Phase 5 — ESP32 sketch cleanup
 
-Drop the inline HTML status page from each sketch (`handleRoot()`). Drop the `/setOffset` endpoint. Remove the dead non-FreeRTOS sketches (`jonesBigAssWeatherStation_indoor.ino`, `jonesBigAssWeatherStation_outdoor.ino`). Keep only the FreeRTOS versions, renamed to `outdoor.ino` and `indoor.ino`. WiFi credentials and IP stay as hardcoded constants — config provisioning is out of scope.
+Drop the inline HTML status page from each sketch (`handleRoot()`). Drop the `/setOffset` endpoint. Remove the dead non-FreeRTOS sketches (`jonesBigAssWeatherStation_indoor.ino`, `jonesBigAssWeatherStation_outdoor.ino`). Keep only the FreeRTOS versions, renamed to `outdoor.ino`, `indoor.ino`, and `basement.ino` (the two indoor-class sketches differ only in IP / title, but both physical sensors exist in this install — see `weather.toml`). WiFi credentials and IP stay as hardcoded constants — config provisioning is out of scope.
+
+While in `handleData()`, fix **BUG-08** at source: each float field is checked with `isnan()` and emits `null` instead of letting `String(NaN)` print the invalid literal `"nan"`. The server's `wire_format.py` regex fallback stays as defense-in-depth for un-reflashed firmware.
 
 **Done when:** the sketches compile, the sensors still report data on `/data`, and the deleted endpoints/files are gone from the repo.
 
