@@ -13,10 +13,11 @@ http_timeout_seconds = 10
 [cache]
 ttl_seconds = 5
 
-# During Phase 1 (and any future offline testing), set fixture_dir to a
-# directory containing outdoor.json, indoor.json, basement.json. When set,
-# sensor polling reads from those files instead of making HTTP calls.
-# Comment out (or remove the whole [development] block) for real polling.
+# Set [development] fixture_dir to a directory containing outdoor.json,
+# indoor.json, basement.json to read from local fixtures instead of
+# polling real ESP32s — useful for offline development. Comment out
+# (or remove) the whole [development] block to enable real HTTP polling
+# of the IPs in the [[sensors]] entries below.
 [development]
 fixture_dir = "fixtures"
 

@@ -41,7 +41,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     db_conn = init_db(config.server.db_path)
     cache = TTLCache(default_ttl=config.cache.ttl_seconds)
-    source = make_source(config.development.fixture_dir)
+    source = make_source(
+        config.development.fixture_dir,
+        http_timeout_seconds=config.logger.http_timeout_seconds,
+    )
 
     app.state.config = config
     app.state.db = db_conn

@@ -1,14 +1,17 @@
 """Sensor poll abstraction.
 
 A SensorSource returns a SensorPayload dict (the same shape the fixture
-files use, the same shape the DB inserts) for a configured sensor. Two
-implementations exist:
+files use, the same shape the DB inserts) for a configured sensor.
+
+Two implementations:
 
 - FixtureSensorSource: reads JSON files from a directory; the outdoor
   file is a list walked round-robin; indoor/basement are single
-  snapshots that may carry an `offline: true` flag.
-- (Phase 2) HttpSensorSource: real HTTP polling of ESP32 /data endpoints.
-  Not implemented in Phase 1.
+  snapshots that may carry an `offline: true` flag. Selected when
+  [development] fixture_dir is set in weather.toml.
+- HttpSensorSource: GET http://<sensor-ip>/data, parse with
+  wire_format, return the payload (or None on any failure). Selected
+  when fixture_dir is unset.
 
 A payload of None means "the sensor is unreachable / offline right now".
 """
@@ -21,6 +24,9 @@ import logging
 from pathlib import Path
 from typing import Any, Protocol
 
+import requests
+
+from . import wire_format
 from .config import SensorConfig
 
 log = logging.getLogger(__name__)
@@ -94,14 +100,49 @@ class FixtureSensorSource:
         return {k: v for k, v in snap.items() if k != "offline"}
 
 
-def make_source(fixture_dir: str | None) -> SensorSource:
+class HttpSensorSource:
+    """Polls real ESP32 sensors via HTTP GET <sensor-ip>/data.
+
+    `requests` is synchronous, so each poll runs in a worker thread via
+    asyncio.to_thread to avoid blocking the event loop. That matches the
+    chosen tech stack (requests is the locked HTTP library) without
+    sacrificing concurrency.
+    """
+
+    def __init__(self, http_timeout_seconds: float = 10.0) -> None:
+        self._timeout = http_timeout_seconds
+
+    async def poll(self, sensor: SensorConfig) -> SensorPayload | None:
+        text = await asyncio.to_thread(self._fetch, sensor)
+        if text is None:
+            return None
+        return wire_format.parse(text, sensor.role)
+
+    def _fetch(self, sensor: SensorConfig) -> str | None:
+        url = f"http://{sensor.ip}/data"
+        try:
+            response = requests.get(url, timeout=self._timeout)
+            response.raise_for_status()
+            return response.text
+        except requests.exceptions.RequestException as exc:
+            log.info("poll failed for %s (%s): %s", sensor.id, url, exc)
+            return None
+
+    def all_outdoor_rows(self) -> list[SensorPayload]:
+        # No prefill in real mode — history accumulates one tick at a time.
+        return []
+
+
+def make_source(
+    fixture_dir: str | None,
+    *,
+    http_timeout_seconds: float = 10.0,
+) -> SensorSource:
     """Pick a SensorSource based on config.
 
-    Phase 1: only fixture mode. Phase 2 will return HttpSensorSource when
-    fixture_dir is None.
+    Fixture mode wins when [development] fixture_dir is set in
+    weather.toml; otherwise real HTTP polling.
     """
-    if fixture_dir is None:
-        raise NotImplementedError(
-            "Real HTTP polling is Phase 2. Set [development] fixture_dir in weather.toml."
-        )
-    return FixtureSensorSource(fixture_dir)
+    if fixture_dir is not None:
+        return FixtureSensorSource(fixture_dir)
+    return HttpSensorSource(http_timeout_seconds=http_timeout_seconds)
