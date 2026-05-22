@@ -19,6 +19,7 @@ class ServerConfig:
     host: str = "0.0.0.0"
     port: int = 8005
     db_path: str = "weather.db"
+    dashboard_dir: str = "../dashboard"
 
 
 @dataclass(frozen=True)

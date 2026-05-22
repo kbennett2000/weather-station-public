@@ -14,9 +14,11 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .cache import TTLCache
@@ -90,6 +92,12 @@ def create_app() -> FastAPI:
     app.include_router(astronomy.router, tags=["astronomy"])
     app.include_router(health.router, tags=["health"])
 
+    @app.get("/", include_in_schema=False)
+    async def _root_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/dashboard/")
+
+    _mount_dashboard(app)
+
     @app.exception_handler(HTTPException)
     async def _http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
         code, message = _classify(exc)
@@ -97,6 +105,36 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=exc.status_code, content=body.model_dump(mode="json"))
 
     return app
+
+
+def _mount_dashboard(app: FastAPI) -> None:
+    """Mount the dashboard static files at /dashboard/.
+
+    The directory is resolved lazily from config at request time so the
+    static mount survives a config swap during lifespan startup. If the
+    directory doesn't exist yet (e.g. fresh checkout before Phase 3 is
+    deployed), the mount is skipped with a warning rather than crashing.
+    """
+    config_path = os.environ.get(CONFIG_ENV, DEFAULT_CONFIG_PATH)
+    try:
+        config = load_config(config_path)
+    except FileNotFoundError:
+        log.warning("config not found at %s; dashboard mount skipped", config_path)
+        return
+
+    dashboard_dir = Path(config.server.dashboard_dir).resolve()
+    if not dashboard_dir.is_dir():
+        log.warning(
+            "dashboard_dir %s does not exist; dashboard mount skipped", dashboard_dir
+        )
+        return
+
+    app.mount(
+        "/dashboard",
+        StaticFiles(directory=str(dashboard_dir), html=True),
+        name="dashboard",
+    )
+    log.info("dashboard mounted at /dashboard/ from %s", dashboard_dir)
 
 
 def _classify(exc: HTTPException) -> tuple[str, str]:
