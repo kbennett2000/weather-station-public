@@ -115,11 +115,26 @@ async function fetchJson(path) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Clock (server-driven for consistency with the polar plot/day arc)
+// Clock — server time is the source of truth, but ticks locally
+// every second between fetches so the readout doesn't look frozen.
+// Each /current response re-anchors; a backgrounded tab resyncs on
+// the next foreground fetch.
 // ─────────────────────────────────────────────────────────────────
 
-function updateClock(serverTimeIso) {
-  const d = new Date(serverTimeIso);
+let clockAnchor = null;  // { serverMs: number, localMs: number }
+
+function anchorServerTime(serverTimeIso) {
+  clockAnchor = {
+    serverMs: new Date(serverTimeIso).getTime(),
+    localMs:  performance.now(),
+  };
+  renderClock();
+}
+
+function renderClock() {
+  if (!clockAnchor) return;
+  const elapsed = performance.now() - clockAnchor.localMs;
+  const d = new Date(clockAnchor.serverMs + elapsed);
   setText('clock', d.toLocaleTimeString('en-US', {
     hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
     timeZone: timezone,
@@ -282,7 +297,7 @@ async function refreshCurrent() {
   setLed('led-db', 'on');
 
   timezone = data.astronomy?.timezone || 'UTC';
-  updateClock(data.server_time);
+  anchorServerTime(data.server_time);
 
   setText('server-tz', timezone);
   setText('server-addr', window.location.host);
@@ -512,7 +527,7 @@ async function refreshHistory() {
   }
 
   const rows = data.rows || [];
-  setText('hist-samples', `${rows.length.toLocaleString()} ${rows.length === 1 ? 'SAMPLE' : 'SAMPLES'}`);
+  setText('hist-samples', formatHistLabel(rows.length, data.bucket_seconds || 0));
   setText('tel-records', rows.length.toLocaleString());
 
   const tempF = rows.map(r => cToF(r.temperature_c));
@@ -537,6 +552,24 @@ async function refreshHistory() {
   setText('chart-cur-dew',   last.dewpoint_c     !== undefined && last.dewpoint_c     !== null ? `${cToF(last.dewpoint_c).toFixed(1)} °F` : '--');
   setText('chart-cur-vis',   last.visible !== undefined && last.visible !== null ? Math.round(last.visible).toLocaleString() : '--');
   setText('chart-cur-ir',    last.ir !== undefined && last.ir !== null ? Math.round(last.ir).toLocaleString() : '--');
+}
+
+function formatHistLabel(count, bucketSeconds) {
+  const n = count.toLocaleString();
+  if (!bucketSeconds) {
+    return `${n} ${count === 1 ? 'SAMPLE' : 'SAMPLES'}`;
+  }
+  let avg;
+  if (bucketSeconds >= 3600 && bucketSeconds % 3600 === 0) {
+    const h = bucketSeconds / 3600;
+    avg = `${h}-HR AVG`;
+  } else if (bucketSeconds % 60 === 0) {
+    const m = bucketSeconds / 60;
+    avg = `${m}-MIN AVG`;
+  } else {
+    avg = `${bucketSeconds}-S AVG`;
+  }
+  return `${n} ${count === 1 ? 'BUCKET' : 'BUCKETS'} (${avg})`;
 }
 
 function pushSeries(chart, values) {
@@ -584,6 +617,7 @@ function start() {
   refreshHistory();
   setInterval(refreshCurrent, CURRENT_REFRESH_MS);
   setInterval(refreshHistory, HISTORY_REFRESH_MS);
+  setInterval(renderClock, 1000);
 }
 
 document.addEventListener('DOMContentLoaded', start);
