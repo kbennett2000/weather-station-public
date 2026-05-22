@@ -20,6 +20,9 @@ PYTHON ?= python3
 VENV   := server/.venv
 VPY    := $(VENV)/bin/python
 HOST   ?= 0.0.0.0
+# PORT overrides what's in weather.toml only for `make dev` / `make serve`,
+# where we pass --port to uvicorn explicitly. The deployed systemd unit
+# reads weather.toml — change it there for a permanent override.
 PORT   ?= 8005
 
 # System python — the widget depends on the apt-installed python3-gi, which

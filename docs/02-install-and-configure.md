@@ -51,7 +51,9 @@ Boot the device, SSH in, get to a prompt. The rest of this doc assumes you're on
 ```bash
 git clone https://github.com/kbennett2000/weather-station-public.git
 cd weather-station-public
-sudo ./install.sh                # server + dashboard only
+sudo ./install.sh                # server + dashboard only, default port 8005
+# OR
+sudo ./install.sh --port 9000    # bind to a different port
 # OR
 sudo ./install.sh --with-widget  # also install GTK system libs for the tray widget
 ```
@@ -63,18 +65,20 @@ What [`install.sh`](../install.sh) does, in order:
 3. **Creates a Python venv** at `server/.venv` owned by your user.
 4. **Editable-installs the server**: `pip install -e ./server`. The `weather-server` console-script entry point is now on the venv's PATH.
 5. **Seeds `server/weather.toml`** from `server/weather.toml.example` (only if `weather.toml` doesn't already exist — re-running install.sh is safe).
-6. **Seeds `branding.toml`** from `branding.toml.example` the same way.
-7. **Writes a systemd unit** at `/etc/systemd/system/weather-server.service`. The unit runs `uvicorn weather_server.main:app --host 0.0.0.0 --port 8005` as `$SUDO_USER`, restarts on failure, logs to journald, and locks down filesystem writes to `server/` only.
-8. **Enables UFW** with `allow ssh` + `allow 8005/tcp`. Nothing else is opened.
+6. **Resolves the port.** If `--port N` was passed, writes that value into `[server] port = N` in `weather.toml`. Then reads the resolved port back out of `weather.toml` for the next two steps. `weather.toml` is the single source of truth from here on.
+7. **Seeds `branding.toml`** from `branding.toml.example` the same way.
+8. **Writes a systemd unit** at `/etc/systemd/system/weather-server.service`. The unit runs the `weather-server` console script (which reads `weather.toml` at startup, including the port) as `$SUDO_USER`, restarts on failure, logs to journald, and locks down filesystem writes to `server/` only.
+9. **Enables UFW** with `allow ssh` + `allow <resolved-port>/tcp`. Nothing else is opened.
 
 Optional flags:
 
+- `--port N` — bind to TCP port `N` instead of the default 8005. install.sh writes the value into `weather.toml` so the service and the firewall stay in sync. Pass on re-install to change the port; the existing `weather.toml` is otherwise left alone.
 - `--with-widget` — also installs the GTK system packages needed by the tray widget. Only matters on a Linux *desktop*; skip on a headless box.
 - `--no-systemd` — install everything but don't write or enable the systemd unit. Useful for development where you'd rather `make dev` by hand.
 - `--no-firewall` — leave UFW alone. Useful if you manage your firewall through some other tool.
 - `--no-start` — don't auto-start the service after installing the unit. Useful when you want to edit `weather.toml` before the first launch.
 
-Re-running `sudo ./install.sh` is safe and idempotent. It reconciles drift — re-installs apt packages, refreshes the venv, rewrites the systemd unit, re-applies the UFW rules. Existing `weather.toml` and `branding.toml` are never overwritten.
+Re-running `sudo ./install.sh` is safe and idempotent. It reconciles drift — re-installs apt packages, refreshes the venv, rewrites the systemd unit, re-applies the UFW rules. Existing `weather.toml` and `branding.toml` are never overwritten (except `--port` rewrites the `[server] port` line surgically).
 
 ---
 
@@ -94,7 +98,7 @@ branding_path = "../branding.toml"
 ```
 
 - `host = "0.0.0.0"` — listen on every interface. Use `127.0.0.1` to restrict to the local machine only.
-- `port = 8005` — the dashboard's public port. If you change it, also update the UFW rule (`sudo ufw allow <new-port>/tcp`) and any clients (widget config, OpenAPI URL).
+- `port = 8005` — the dashboard's public port. **This is the single source of truth for the port.** The systemd unit reads it at startup, so changing it here and running `sudo systemctl restart weather-server.service` is all you need on the server side. UFW is the only thing that doesn't auto-follow — either re-run `sudo ./install.sh --port <new-port>` (which rewrites this line and re-applies the UFW rule in one shot) or update UFW manually with `sudo ufw delete allow 8005/tcp && sudo ufw allow <new-port>/tcp`. Don't forget any clients (widget `server_url`, bookmarked dashboard URLs).
 - `db_path` — relative to the working directory the service runs from (which is `server/` under the systemd unit). The default `weather.db` puts the file at `server/weather.db`. Absolute paths work too.
 - `dashboard_dir` / `branding_path` — usually leave the defaults. The systemd unit's `WorkingDirectory` is `server/`, so `../dashboard` and `../branding.toml` resolve to the repo root.
 

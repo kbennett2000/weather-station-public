@@ -8,16 +8,30 @@
 #     editable mode with --extra-index-url disabled (uses defaults).
 #   * Drops a systemd unit at /etc/systemd/system/weather-server.service
 #     so the server runs at boot, restarts on failure, logs to journald.
-#   * Opens TCP 8005 in UFW and leaves all other inbound ports closed.
+#   * Opens the configured TCP port in UFW and leaves everything else closed.
 #
 # What this DOES NOT do (intentionally — out of scope per CLAUDE.md):
-#   * No iptables redirects. Dashboard binds directly to 8005.
+#   * No iptables redirects. Dashboard binds directly to the configured port.
 #   * No MariaDB / MySQL. Storage is SQLite (single file under server/).
 #   * No network configuration (netplan / static IP). DHCP works fine;
 #     pin the host in your router if you want a stable address.
 #   * No ESP32 sketch flashing. Use arduino-cli or the Arduino IDE.
 #
+# Port resolution:
+#   server/weather.toml is the single source of truth for the port. The
+#   systemd unit runs the `weather-server` console script which reads
+#   port from that file at startup. install.sh uses the same value for
+#   the UFW rule and the "open this URL" message.
+#
+#   On first install (no weather.toml exists yet) the script seeds the
+#   file from weather.toml.example. The --port flag overrides the seeded
+#   value. On re-install, the existing file is left alone; pass --port
+#   to also rewrite it.
+#
 # Optional flags:
+#   --port N           Use TCP port N instead of the default 8005. Writes
+#                      the value into weather.toml so the service and UFW
+#                      stay in sync.
 #   --with-widget      Also install GTK system packages for the tray
 #                      widget (python3-gi, gir1.2-appindicator3-0.1, ...).
 #   --no-systemd       Skip the systemd unit (useful for dev environments
@@ -29,7 +43,8 @@
 # Usage:
 #   git clone https://github.com/kbennett2000/weather-station-public.git
 #   cd weather-station-public
-#   sudo ./install.sh                       # server only
+#   sudo ./install.sh                       # server only, default port 8005
+#   sudo ./install.sh --port 9000           # bind to 9000 instead
 #   sudo ./install.sh --with-widget         # server + widget deps
 #
 # This script is idempotent: re-running it on an already-installed host
@@ -45,19 +60,37 @@ WITH_WIDGET=false
 DO_SYSTEMD=true
 DO_FIREWALL=true
 DO_START=true
+PORT_OVERRIDE=""
 
-for arg in "$@"; do
-    case "$arg" in
-        --with-widget)  WITH_WIDGET=true ;;
-        --no-systemd)   DO_SYSTEMD=false ;;
-        --no-firewall)  DO_FIREWALL=false ;;
-        --no-start)     DO_START=false ;;
+while (( $# )); do
+    case "$1" in
+        --with-widget)  WITH_WIDGET=true; shift ;;
+        --no-systemd)   DO_SYSTEMD=false; shift ;;
+        --no-firewall)  DO_FIREWALL=false; shift ;;
+        --no-start)     DO_START=false; shift ;;
+        --port)
+            shift
+            if [[ $# -eq 0 || ! "$1" =~ ^[0-9]+$ ]]; then
+                echo "--port requires a numeric value (1-65535)" >&2
+                exit 2
+            fi
+            PORT_OVERRIDE="$1"
+            shift
+            ;;
+        --port=*)
+            PORT_OVERRIDE="${1#--port=}"
+            if [[ ! "$PORT_OVERRIDE" =~ ^[0-9]+$ ]]; then
+                echo "--port requires a numeric value (1-65535)" >&2
+                exit 2
+            fi
+            shift
+            ;;
         -h|--help)
             sed -n '2,/^set -/p' "$0" | sed 's/^# \{0,1\}//; /^set -/d'
             exit 0
             ;;
         *)
-            echo "unknown flag: $arg" >&2
+            echo "unknown flag: $1" >&2
             echo "see: $0 --help" >&2
             exit 2
             ;;
@@ -146,6 +179,46 @@ else
     SEEDED_SERVER_CONFIG=false
 fi
 
+# If --port was passed, rewrite [server] port in weather.toml so the
+# systemd unit and UFW agree with the file. We do this even on re-runs
+# because that's the documented behavior — pass --port to change it.
+if [[ -n "$PORT_OVERRIDE" ]]; then
+    echo "==> Setting [server] port = $PORT_OVERRIDE in server/weather.toml…"
+    sudo -u "$INSTALL_USER" python3 - "$REPO_DIR/server/weather.toml" "$PORT_OVERRIDE" <<'PY'
+"""Replace the `port = ...` line under [server] without touching the
+rest of the file. We do a string rewrite rather than a full TOML
+round-trip so user comments and ordering are preserved."""
+import re, sys
+path, port = sys.argv[1], int(sys.argv[2])
+text = open(path).read()
+# Anchor inside [server] section: replace the first `port = N` between
+# `[server]` and the next `[…]` heading.
+new_text, n = re.subn(
+    r"(\[server\][^\[]*?\bport\s*=\s*)\d+",
+    lambda m: f"{m.group(1)}{port}",
+    text,
+    count=1,
+    flags=re.DOTALL,
+)
+if n == 0:
+    print(f"warning: couldn't find [server] port to rewrite in {path}; appending one")
+    new_text = text.rstrip() + f"\n\n# Added by install.sh --port\n[server]\nport = {port}\n"
+open(path, "w").write(new_text)
+PY
+fi
+
+# Read the resolved port back out of weather.toml — this is the value
+# used for the UFW rule and the final URL message. The systemd unit
+# also reads it (via the weather-server console script).
+RESOLVED_PORT="$(python3 - "$REPO_DIR/server/weather.toml" <<'PY'
+import sys, tomllib
+with open(sys.argv[1], "rb") as f:
+    cfg = tomllib.load(f)
+print(cfg.get("server", {}).get("port", 8005))
+PY
+)"
+echo "==> Resolved port from weather.toml: $RESOLVED_PORT"
+
 if [[ ! -f "$REPO_DIR/branding.toml" ]]; then
     echo "==> Seeding branding.toml from branding.toml.example…"
     sudo -u "$INSTALL_USER" cp \
@@ -180,7 +253,7 @@ Type=exec
 User=$INSTALL_USER
 Group=$INSTALL_USER
 WorkingDirectory=$REPO_DIR/server
-ExecStart=$VENV_DIR/bin/uvicorn weather_server.main:app --host 0.0.0.0 --port 8005
+ExecStart=$VENV_DIR/bin/weather-server
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -219,10 +292,10 @@ fi
 # ──────────────────────────────────────────────────────────────────────
 
 if $DO_FIREWALL; then
-    echo "==> Configuring UFW (allow ssh + 8005, deny everything else)…"
+    echo "==> Configuring UFW (allow ssh + $RESOLVED_PORT/tcp, deny everything else)…"
     ufw --force enable >/dev/null
     ufw allow ssh >/dev/null
-    ufw allow 8005/tcp >/dev/null
+    ufw allow "$RESOLVED_PORT/tcp" >/dev/null
     ufw reload >/dev/null
     ufw status verbose | sed 's/^/    /'
 fi
@@ -255,8 +328,8 @@ EOF
 fi
 
 cat <<EOF
-  3. Open http://<this-host>:8005 in a browser. Dashboard should load
-     and (if real sensors are reachable) show live data within ~30s.
+  3. Open http://<this-host>:$RESOLVED_PORT in a browser. Dashboard should
+     load and (if real sensors are reachable) show live data within ~30s.
 
 EOF
 

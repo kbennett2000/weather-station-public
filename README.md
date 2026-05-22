@@ -35,13 +35,14 @@ If you’re new here (and even if you ain’t), read these three docs **in order
 ```bash
 git clone https://github.com/kbennett2000/weather-station-public.git
 cd weather-station-public
-sudo ./install.sh
+sudo ./install.sh                    # default port 8005
+# or: sudo ./install.sh --port 9000  # any TCP port you like
 $EDITOR server/weather.toml          # set your sensor IPs, drop fixture mode
 $EDITOR branding.toml                # optional: fill in the [BRANDING] slots with your own good ass flavor
 sudo systemctl restart weather-server.service
 ```
 
-Then open `http://<this-host>:8005/`.  
+Then open `http://<this-host>:8005/` (or whatever port you picked).  
 If anything’s unclear, just go read [`02-install-and-configure.md`](docs/02-install-and-configure.md) — it walks you through the whole thing like Toby would (with enthusiasm and probably a beer).
 
 ## Developer Workflow (For When You Get Extra Motivated)
