@@ -67,7 +67,7 @@ Used in `/api/v1/current`, `/api/v1/current/{sensor_id}`, and as the building bl
   "raw": {
     "temperature_c": 18.9,
     "humidity_pct": 42.1,
-    "pressure_pa": 80443,
+    "pressure_pa": 84725,
     "lux": 12450.0,
     "ir": 230,
     "visible": 8200,
@@ -84,8 +84,8 @@ Used in `/api/v1/current`, `/api/v1/current/{sensor_id}`, and as the building bl
     "dewpoint_c": 5.1,
     "dewpoint_f": 41.2,
     "absolute_humidity_g_m3": 6.7,
-    "pressure_station_hpa": 804.43,
-    "pressure_station_inhg": 23.75,
+    "pressure_station_hpa": 847.25,
+    "pressure_station_inhg": 25.02,
     "pressure_sealevel_hpa": 1023.0,
     "pressure_sealevel_inhg": 30.21
   },
@@ -99,7 +99,7 @@ Used in `/api/v1/current`, `/api/v1/current/{sensor_id}`, and as the building bl
     "speed_kmh": 0.0,
     "course_deg": 0.0,
     "dms": "39°44'21.1\"N  104°59'25.1\"W",
-    "maidenhead": "DM79lp"
+    "maidenhead": "DM79mr"
   },
 
   "device": {
@@ -309,7 +309,7 @@ Only `outdoor` is currently logged (see `weather-station-schema.md`). Calls with
       "temperature_f": 65.1,
       "humidity_pct": 42.1,
       "pressure_sealevel_hpa": 1023.0,
-      "pressure_station_hpa": 804.4,
+      "pressure_station_hpa": 847.25,
       "dewpoint_c": 5.1
     }
   ]
@@ -527,6 +527,8 @@ has_light = true
 online_threshold_seconds = 120
 temp_offset_c = -0.5
 fallback_altitude_m = 1609.3   # used for sea-level adjustment if GPS has no fix
+fallback_lat = 39.7392         # used by astronomy if GPS has no fix
+fallback_lon = -104.9903       # used by astronomy if GPS has no fix
 
 [[sensors]]
 id = "indoor"

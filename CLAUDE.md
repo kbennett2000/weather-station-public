@@ -116,7 +116,7 @@ Build the FastAPI server: SQLite schema, derivation functions, all six endpoints
 **Done when:**
 - `curl http://localhost:8005/api/v1/current` returns valid JSON matching `02-api-design.md`.
 - Every endpoint returns the right shape for both success and the documented error cases (404 for unknown sensor, 404 for non-outdoor sensor history, etc.).
-- The four pressure fields are present and computed correctly (verify with a Denver-elevation test case: station ~804 hPa / 23.75 inHg, sea-level ~1023 hPa / 30.21 inHg).
+- The four pressure fields are present and computed correctly (verify with a Denver-elevation test case: station ~847 hPa / 25.02 inHg, sea-level ~1023 hPa / 30.21 inHg).
 - OpenAPI docs render at `/docs`.
 - Tests cover at least: each derivation function, each endpoint's response shape, the pressure-quadruple, the offline-sensor case.
 

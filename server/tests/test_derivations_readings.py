@@ -58,46 +58,46 @@ def test_pressure_station_to_sealevel_formula() -> None:
     )
 
 
-def test_pressure_quadruple_from_design_doc_inputs() -> None:
-    """The example in 02-api-design.md uses raw pressure_pa=80443 at
-    altitude 1609.3m with 18.4°C. The doc's listed sealevel of 1023 hPa
-    is NOT consistent with the hypsometric formula for those inputs —
-    the math gives ≈971 hPa. This test asserts the correct math; the
-    doc-example inconsistency is flagged in the Phase 1 summary.
-    """
+def test_pressure_quadruple_matches_doc_example() -> None:
+    """The example in 02-api-design.md uses raw.pressure_pa = 84725 with
+    altitude_m = 1609.3 and calibrated temp = 18.4°C, producing
+    station 847.25 hPa / 25.02 inHg and sealevel 1023.0 hPa / 30.21 inHg.
+    This test is the doc-conformance check: if the spec example changes,
+    this should change with it."""
     derived = readings.derive_reading(
         {
             "temperature_c": 18.9,
             "humidity_pct": 42.1,
-            "pressure_pa": 80443,
+            "pressure_pa": 84725,
             "altitude_m": 1609.3,
         },
         temp_offset_c=-0.5,
         fallback_altitude_m=1609.3,
     )
-    assert derived["pressure_station_hpa"] == pytest.approx(804.43)
-    assert derived["pressure_station_inhg"] == pytest.approx(23.75, abs=0.01)
-    # Hypsometric result for these inputs:
-    assert derived["pressure_sealevel_hpa"] == pytest.approx(971.4, abs=1.0)
-    assert derived["pressure_sealevel_inhg"] == pytest.approx(28.69, abs=0.05)
+    assert derived["pressure_station_hpa"] == pytest.approx(847.25)
+    assert derived["pressure_station_inhg"] == pytest.approx(25.02, abs=0.01)
+    assert derived["pressure_sealevel_hpa"] == pytest.approx(1023.0, abs=1.0)
+    assert derived["pressure_sealevel_inhg"] == pytest.approx(30.21, abs=0.05)
 
 
-def test_pressure_quadruple_realistic_denver() -> None:
-    """A station pressure that does produce a Denver-typical sealevel of
-    ~1023 hPa / 30.21 inHg. Validates the formula against the CLAUDE.md
-    done-criterion target values."""
+def test_pressure_quadruple_hypsometric_formula_check() -> None:
+    """Independent math check on the hypsometric formula, using a
+    different station pressure than the doc example. Pins the formula's
+    output to ~971 hPa / 28.69 inHg for pressure_pa=80443 at Denver
+    elevation. Not a doc test — pure math correctness."""
     derived = readings.derive_reading(
         {
             "temperature_c": 18.4,
             "humidity_pct": 42.0,
-            "pressure_pa": 84725,
+            "pressure_pa": 80443,
             "altitude_m": 1609.3,
         },
         temp_offset_c=0.0,
     )
-    assert derived["pressure_station_hpa"] == pytest.approx(847.25, abs=0.05)
-    assert derived["pressure_sealevel_hpa"] == pytest.approx(1023.0, abs=1.0)
-    assert derived["pressure_sealevel_inhg"] == pytest.approx(30.21, abs=0.05)
+    assert derived["pressure_station_hpa"] == pytest.approx(804.43)
+    assert derived["pressure_station_inhg"] == pytest.approx(23.75, abs=0.01)
+    assert derived["pressure_sealevel_hpa"] == pytest.approx(971.4, abs=1.0)
+    assert derived["pressure_sealevel_inhg"] == pytest.approx(28.69, abs=0.05)
 
 
 def test_pressure_sealevel_falls_back_to_configured_altitude() -> None:

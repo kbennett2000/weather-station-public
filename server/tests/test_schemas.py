@@ -46,7 +46,7 @@ def test_sensor_reading_full_outdoor_shape() -> None:
             "speed_kmh": 0.0,
             "course_deg": 0.0,
             "dms": '39°44\'21.1"N  104°59\'25.1"W',
-            "maidenhead": "DM79lp",
+            "maidenhead": "DM79mr",
         },
         "device": {
             "rssi_dbm": -62,
@@ -56,7 +56,7 @@ def test_sensor_reading_full_outdoor_shape() -> None:
     }
     sr = schemas.SensorReading.model_validate(payload)
     assert sr.derived.pressure_sealevel_inhg == pytest.approx(30.21)
-    assert sr.location is not None and sr.location.maidenhead == "DM79lp"
+    assert sr.location is not None and sr.location.maidenhead == "DM79mr"
 
 
 def test_sensor_reading_indoor_has_no_location_or_light() -> None:

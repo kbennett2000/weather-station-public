@@ -178,11 +178,13 @@ def _resolve_reference_location(
         )
 
     outdoor_cfg = config.outdoor
-    if outdoor_cfg is not None and outdoor_cfg.fallback_altitude_m is not None:
-        # No explicit fallback lat/lon in the current config schema; if a
-        # deployment cares it can extend SensorConfig. For now, no fallback
-        # location means "no astronomy possible".
-        pass
+    if (
+        outdoor_cfg is not None
+        and outdoor_cfg.fallback_lat is not None
+        and outdoor_cfg.fallback_lon is not None
+    ):
+        return outdoor_cfg.fallback_lat, outdoor_cfg.fallback_lon, "config_default"
+
     return None, None, "config_default"
 
 

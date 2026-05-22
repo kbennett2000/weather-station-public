@@ -22,10 +22,6 @@ def test_dms_southern_hemisphere() -> None:
 
 def test_maidenhead_denver() -> None:
     # 39.7392, -104.9903 → DM79mr.
-    # NOTE: 02-api-design.md shows "DM79lp" for these coordinates, which is
-    # incorrect — the correct grid for that lat/lon is DM79mr (cross-checked
-    # against the London test below, which uses the canonical IO91wm).
-    # Flagged in the Phase 1 summary.
     assert location.maidenhead(39.7392, -104.9903) == "DM79mr"
 
 

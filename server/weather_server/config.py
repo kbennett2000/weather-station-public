@@ -47,6 +47,8 @@ class SensorConfig:
     online_threshold_seconds: int = 120
     temp_offset_c: float = 0.0
     fallback_altitude_m: float | None = None
+    fallback_lat: float | None = None
+    fallback_lon: float | None = None
 
 
 @dataclass(frozen=True)
