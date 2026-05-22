@@ -89,7 +89,9 @@ def _build_reading(
     )
 
 
-def _row_to_payload(row: sqlite3.Row) -> dict[str, Any]:
+def _row_to_payload(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    """Accepts either a real sqlite3.Row from the DB or a bucketed dict
+    synthesised by the history endpoint; both support keys() + [k] access."""
     payload = {k: row[k] for k in row.keys() if k not in {"id", "timestamp"}}
     return {k: v for k, v in payload.items() if v is not None}
 
@@ -272,7 +274,7 @@ HISTORY_GROUPS = {
 
 
 def build_history_row(
-    row: sqlite3.Row,
+    row: sqlite3.Row | dict[str, Any],
     sensor: SensorConfig,
     include_groups: set[str],
 ) -> dict[str, Any]:

@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 from weather_server.branding import _empty_branding, load_branding
-
 
 # ── Loader: file precedence ───────────────────────────────────────────
 

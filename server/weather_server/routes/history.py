@@ -6,8 +6,9 @@ Only `outdoor` is logged; any other sensor_id returns 404
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -97,14 +98,18 @@ def _resolve_bucket(bucket: str, hours: int) -> int:
     return int(bucket)
 
 
-def _bucket_rows(rows: list, bucket_seconds: int) -> list:
+def _bucket_rows(
+    rows: list[sqlite3.Row], bucket_seconds: int
+) -> list[sqlite3.Row] | list[dict[str, Any]]:
     """Group rows into buckets of `bucket_seconds` and average continuous
     quantities. Returns one synthetic row per bucket carrying the mean
-    timestamp and means for the numeric columns."""
+    timestamp and means for the numeric columns. When no bucketing is
+    requested (bucket_seconds <= 0), the raw rows pass through unchanged.
+    """
     if not rows or bucket_seconds <= 0:
         return rows
-    out: list[dict] = []
-    current_bucket: list = []
+    out: list[dict[str, Any]] = []
+    current_bucket: list[sqlite3.Row] = []
     current_start: int | None = None
     for row in rows:
         ts = int(row["timestamp"])
@@ -121,7 +126,7 @@ def _bucket_rows(rows: list, bucket_seconds: int) -> list:
     return out
 
 
-def _aggregate_bucket(rows: list, bucket_start: int) -> dict:
+def _aggregate_bucket(rows: list[sqlite3.Row], bucket_start: int) -> dict[str, Any]:
     """Mean for continuous cols, most-recent for discrete cols."""
     continuous = (
         "temperature_c",
@@ -137,7 +142,7 @@ def _aggregate_bucket(rows: list, bucket_start: int) -> dict:
     )
     last_row = rows[-1]
     keys = last_row.keys()
-    agg: dict = {"timestamp": bucket_start}
+    agg: dict[str, Any] = {"timestamp": bucket_start}
     for k in keys:
         if k in {"id", "timestamp"}:
             continue

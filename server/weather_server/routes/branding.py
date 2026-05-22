@@ -16,4 +16,7 @@ router = APIRouter()
 
 @router.get("/api/v1/branding")
 async def get_branding(request: Request) -> dict[str, Any]:
-    return request.app.state.branding
+    # app.state.branding is populated in lifespan startup from branding.py.
+    # Starlette's State exposes attributes as Any, so we re-narrow here.
+    branding: dict[str, Any] = request.app.state.branding
+    return branding

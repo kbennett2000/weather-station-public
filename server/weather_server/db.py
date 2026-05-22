@@ -126,7 +126,7 @@ def insert_outdoor_reading(
 
 def latest_outdoor_reading(conn: sqlite3.Connection) -> sqlite3.Row | None:
     """Return the most recent row, or None if the table is empty."""
-    row = conn.execute(
+    row: sqlite3.Row | None = conn.execute(
         "SELECT * FROM outdoor_readings ORDER BY timestamp DESC LIMIT 1"
     ).fetchone()
     return row

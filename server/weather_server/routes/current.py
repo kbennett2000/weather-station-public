@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from .. import db as db_module
+from ..cache import TTLCache
 from ..config import SensorConfig
 from ..responses import (
     build_astronomy,
@@ -17,6 +18,7 @@ from ..responses import (
     utc_now,
 )
 from ..schemas import CurrentResponse, CurrentSensorResponse, SensorReading
+from ..sensors import SensorPayload, SensorSource
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +79,7 @@ async def get_current_one(sensor_id: str, request: Request) -> CurrentSensorResp
     cache = request.app.state.cache
     last_seen: dict[str, Any] = request.app.state.last_seen
 
+    reading: SensorReading
     if sensor_cfg.role == "outdoor":
         row = db_module.latest_outdoor_reading(db)
         if row is None:
@@ -90,9 +93,10 @@ async def get_current_one(sensor_id: str, request: Request) -> CurrentSensorResp
         except Exception:
             log.exception("poll failed for %s", sensor_id)
             payload = None
-        reading = _live_reading_from_poll_result(sensor_cfg, payload, last_seen, server_time)
-        if reading is None:
+        live = _live_reading_from_poll_result(sensor_cfg, payload, last_seen, server_time)
+        if live is None:
             raise HTTPException(status_code=503, detail=("sensor_no_data", sensor_id))
+        reading = live
 
     astronomy = build_astronomy(
         server_time,
@@ -103,9 +107,13 @@ async def get_current_one(sensor_id: str, request: Request) -> CurrentSensorResp
 
 
 async def _poll_with_cache(
-    cache: Any, source: Any, sensor: SensorConfig, *, ttl: float
-) -> dict[str, Any] | None:
-    async def fetch() -> dict[str, Any] | None:
+    cache: TTLCache,
+    source: SensorSource,
+    sensor: SensorConfig,
+    *,
+    ttl: float,
+) -> SensorPayload | None:
+    async def fetch() -> SensorPayload | None:
         return await source.poll(sensor)
 
     return await cache.get_or_fetch(sensor.id, fetch, ttl=ttl)
