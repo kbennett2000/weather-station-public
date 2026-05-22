@@ -21,7 +21,14 @@ const CYAN_DIM  = 'rgba(88, 196, 212, 0.10)';
 // ─────────────────────────────────────────────────────────────────
 
 let timezone = 'UTC';
-let currentWindowHours = 24;
+let currentWindowHours = (() => {
+  // ?hours=N in the URL deep-links to a specific time window for the
+  // history panel. Useful for screenshots and shareable links. Only
+  // accepted values are the same ones the button bar offers.
+  const allowed = new Set([1, 6, 12, 24, 168]);
+  const fromUrl = parseInt(new URLSearchParams(window.location.search).get('hours'), 10);
+  return allowed.has(fromUrl) ? fromUrl : 24;
+})();
 let charts = {};
 
 // ─────────────────────────────────────────────────────────────────
@@ -665,6 +672,13 @@ function hpaToInHg(hpa) {
 // ─────────────────────────────────────────────────────────────────
 
 function wireWindowBar() {
+  // Sync the active button with currentWindowHours (which may have been
+  // overridden via ?hours= in the URL).
+  document.querySelectorAll('.window-btn').forEach(b => {
+    const isActive = parseInt(b.dataset.hours, 10) === currentWindowHours;
+    b.classList.toggle('active', isActive);
+  });
+
   document.querySelectorAll('.window-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.window-btn').forEach(b => b.classList.remove('active'));
