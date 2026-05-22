@@ -7,7 +7,7 @@ inputs. Each `build_*` function returns a Pydantic model from schemas.py.
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .config import Config, SensorConfig
@@ -143,8 +143,8 @@ def build_astronomy(
         sun = SunBlock()
         moon = MoonBlock()
     else:
-        sun = _build_sun_block(server_time, lat, lon)
-        moon = _build_moon_block(server_time, lat, lon)
+        sun = _build_sun_block(server_time, lat, lon, tz_name)
+        moon = _build_moon_block(server_time, lat, lon, tz_name)
 
     return Astronomy(
         server_time=server_time,
@@ -188,7 +188,17 @@ def _resolve_reference_location(
     return None, None, "config_default"
 
 
-def _build_sun_block(server_time: datetime, lat: float, lon: float) -> SunBlock:
+def _to_local(d: datetime | None, tz_name: str) -> datetime | None:
+    """Project a UTC datetime into the resolved IANA zone, leaving None alone.
+    Sun and moon event timestamps go out to clients as local-zoned ISO
+    strings per 02-api-design.md; deltas (day length, seconds to sunset)
+    are computed from the original UTC values before this projection."""
+    if d is None or tz_name == "UTC":
+        return d
+    return astro.to_local(d, tz_name)
+
+
+def _build_sun_block(server_time: datetime, lat: float, lon: float, tz_name: str) -> SunBlock:
     pos = astro.sun_position(server_time, lat, lon)
     times = astro.sun_times(server_time, lat, lon)
 
@@ -203,10 +213,8 @@ def _build_sun_block(server_time: datetime, lat: float, lon: float) -> SunBlock:
         if delta >= 0:
             secs_to_sunset = delta
     if secs_to_sunset is None and times.sunrise is not None:
-        # After sunset → count to tomorrow's sunrise.
-        # Approximate by adding 24h to today's sunrise if it's already past.
-        from datetime import timedelta
-
+        # After sunset → count to tomorrow's sunrise. Approximate by adding
+        # 24h to today's sunrise if it's already past.
         tomorrow_sunrise = (
             times.sunrise if times.sunrise > server_time else times.sunrise + timedelta(days=1)
         )
@@ -216,18 +224,18 @@ def _build_sun_block(server_time: datetime, lat: float, lon: float) -> SunBlock:
         altitude_deg=pos.altitude_deg,
         azimuth_deg=pos.azimuth_deg,
         is_daytime=pos.altitude_deg > 0,
-        sunrise=times.sunrise,
-        sunset=times.sunset,
-        solar_noon=times.solar_noon,
-        dawn=times.dawn,
-        dusk=times.dusk,
+        sunrise=_to_local(times.sunrise, tz_name),
+        sunset=_to_local(times.sunset, tz_name),
+        solar_noon=_to_local(times.solar_noon, tz_name),
+        dawn=_to_local(times.dawn, tz_name),
+        dusk=_to_local(times.dusk, tz_name),
         day_length_seconds=day_length,
         seconds_to_sunset=secs_to_sunset,
         seconds_to_sunrise=secs_to_sunrise,
     )
 
 
-def _build_moon_block(server_time: datetime, lat: float, lon: float) -> MoonBlock:
+def _build_moon_block(server_time: datetime, lat: float, lon: float, tz_name: str) -> MoonBlock:
     pos = astro.moon_position(server_time, lat, lon)
     illum = astro.moon_illumination(server_time)
     times = astro.moon_times(server_time, lat, lon)
@@ -238,8 +246,8 @@ def _build_moon_block(server_time: datetime, lat: float, lon: float) -> MoonBloc
         illumination_pct=illum.fraction * 100.0,
         phase_name=astro.moon_phase_name(illum.phase),
         phase_icon=astro.moon_phase_icon(illum.phase),
-        moonrise=times.get("rise"),
-        moonset=times.get("set"),
+        moonrise=_to_local(times.get("rise"), tz_name),
+        moonset=_to_local(times.get("set"), tz_name),
         always_up=bool(times.get("always_up", False)),
         always_down=bool(times.get("always_down", False)),
     )

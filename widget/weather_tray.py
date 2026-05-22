@@ -92,23 +92,17 @@ def fmt_seconds_dhms(seconds: float | int | None) -> str:
     return f"{days}d {hours:02d}hrs {minutes:02d}min {secs:02d}sec"
 
 
-def fmt_hhmm(iso_str: str | None, tz_name: str | None = None) -> str:
-    """Format an ISO 8601 timestamp as HH:MM. If tz_name is given, convert
-    into that IANA zone first (the API currently returns sun/moon event
-    times in UTC, so the dashboard and widget both project into the
-    resolved local zone for display)."""
+def fmt_hhmm(iso_str: str | None) -> str:
+    """Format an ISO 8601 timestamp as HH:MM using its embedded offset.
+    The server emits sun/moon events in the resolved station timezone
+    (post-Phase-4.5), so a bare strftime on the parsed datetime gives the
+    station's wall clock without any additional conversion."""
     if not iso_str:
         return "—"
     try:
-        dt = datetime.fromisoformat(iso_str)
+        return datetime.fromisoformat(iso_str).strftime("%H:%M")
     except ValueError:
         return "—"
-    if tz_name:
-        try:
-            dt = dt.astimezone(ZoneInfo(tz_name))
-        except ZoneInfoNotFoundError:
-            pass
-    return dt.strftime("%H:%M")
 
 
 def tz_abbrev(iana_name: str | None, at: datetime | None = None) -> str:
@@ -177,15 +171,15 @@ def _sun_timing_lines(sun_block: dict[str, Any], local_now: datetime | None) -> 
     return lines
 
 
-def _moon_event_strs(moon_block: dict[str, Any], tz_name: str | None) -> tuple[str, str]:
+def _moon_event_strs(moon_block: dict[str, Any]) -> tuple[str, str]:
     """Format moonrise/moonset, honoring the always_up / always_down flags."""
     if moon_block.get("always_up"):
         return "↑ Always up", "↑ Always up"
     if moon_block.get("always_down"):
         return "↓ Never rises", "↓ Never sets"
     return (
-        fmt_hhmm(moon_block.get("moonrise"), tz_name),
-        fmt_hhmm(moon_block.get("moonset"), tz_name),
+        fmt_hhmm(moon_block.get("moonrise")),
+        fmt_hhmm(moon_block.get("moonset")),
     )
 
 
@@ -241,8 +235,8 @@ def format_popup(payload: dict[str, Any]) -> str:
     moon_phase = moon_b.get("phase_name") or "—"
     moon_illum = moon_b.get("illumination_pct")
 
-    moon_rise_s, moon_set_s = _moon_event_strs(moon_b, tz_name)
-    updated_s = fmt_hhmm(astro.get("local_time"), tz_name)
+    moon_rise_s, moon_set_s = _moon_event_strs(moon_b)
+    updated_s = fmt_hhmm(astro.get("local_time"))
 
     lines = [
         HEADER_MARKUP,
@@ -262,11 +256,11 @@ def format_popup(payload: dict[str, Any]) -> str:
     lines.append("")
 
     if sun_b:
-        sr = fmt_hhmm(sun_b.get("sunrise"), tz_name)
-        dawn = fmt_hhmm(sun_b.get("dawn"), tz_name)
-        noon = fmt_hhmm(sun_b.get("solar_noon"), tz_name)
-        ss = fmt_hhmm(sun_b.get("sunset"), tz_name)
-        dusk = fmt_hhmm(sun_b.get("dusk"), tz_name)
+        sr = fmt_hhmm(sun_b.get("sunrise"))
+        dawn = fmt_hhmm(sun_b.get("dawn"))
+        noon = fmt_hhmm(sun_b.get("solar_noon"))
+        ss = fmt_hhmm(sun_b.get("sunset"))
+        dusk = fmt_hhmm(sun_b.get("dusk"))
         lines.append(f"🌅 Sunrise (Dawn): {sr} ({dawn})")
         lines.append(f"☀️ Solar Noon: {noon}")
         lines.append(f"🌇 Sunset (Dusk): {ss} ({dusk})")

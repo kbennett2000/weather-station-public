@@ -108,3 +108,41 @@ def test_astronomy_query_override_takes_precedence() -> None:
     )
     assert a.reference_location.source == "query_override"
     assert a.timezone == "Asia/Tokyo"
+
+
+def test_sun_and_moon_events_are_emitted_in_resolved_local_zone() -> None:
+    """Per 02-api-design.md line 49: sunrise/sunset/etc. must be in the
+    resolved local timezone, not UTC. Both clients depended on this and
+    were doing the conversion themselves until Phase 4.5; lock it in
+    here so a server-side regression can't quietly re-introduce drift."""
+    config = _config(
+        {
+            "id": "outdoor",
+            "role": "outdoor",
+            "ip": "1.1.1.1",
+            "has_gps": True,
+            "fallback_lat": 0.0,
+            "fallback_lon": 0.0,
+        }
+    )
+    server_time = datetime(2026, 6, 21, 12, 0, 0, tzinfo=UTC)
+    a = build_astronomy(
+        server_time,
+        config,  # type: ignore[arg-type]
+        outdoor_reading=None,
+        lat_override=39.7392,
+        lon_override=-104.9903,
+    )
+    assert a.timezone == "America/Denver"
+    # America/Denver is UTC-06:00 in late June (MDT). Every sun/moon
+    # event timestamp should carry that offset, not Z/+00:00.
+    sun_events = [a.sun.sunrise, a.sun.sunset, a.sun.solar_noon, a.sun.dawn, a.sun.dusk]
+    moon_events = [a.moon.moonrise, a.moon.moonset]
+    for dt in sun_events + moon_events:
+        if dt is None:
+            continue
+        assert dt.utcoffset() is not None
+        # MDT = -6h; allow either MDT or MST in case of fixture edge cases.
+        assert dt.utcoffset().total_seconds() in (-6 * 3600, -7 * 3600), (
+            f"event {dt.isoformat()} not projected into America/Denver"
+        )

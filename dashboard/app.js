@@ -79,6 +79,10 @@ function fmtKB(bytes) {
 }
 
 function fmtTimeOfDay(isoString) {
+  // Server emits sun/moon event timestamps in the resolved station zone
+  // (post-Phase-4.5). `timeZone: timezone` is still passed because the
+  // browser may not be in the station's zone — this anchors the wall
+  // clock to the station for any viewer.
   if (!isoString) return '--';
   const d = new Date(isoString);
   return d.toLocaleTimeString('en-US', {
