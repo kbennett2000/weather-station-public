@@ -168,3 +168,65 @@ Rewrite `installScriptUbuntu.sh` as `install.sh`. Install the new stack (FastAPI
 - Existing legacy code in the repo has not been touched yet.
 
 This section gets updated as phases complete.
+
+## Git Workflow
+
+After any code change is complete and verified (tests pass / lint clean /
+feature works), do the following without being asked:
+
+1. `git add -A` to stage all changes
+2. Commit with a concise conventional-commit message
+   (e.g. `feat: add user auth middleware`, `fix: handle empty cart edge case`,
+   `refactor: extract validation into shared module`, `docs: update README`)
+3. `git push` to push to origin/main
+
+Commit at logical checkpoints — a complete feature, a bug fix, a refactor —
+not after every individual file edit. If a task spans multiple commits,
+make each commit independently meaningful and atomic.
+
+If `git push` fails (auth, conflict, network), surface the full error to the
+user immediately. Do not retry silently or attempt destructive resolutions
+(no `--force`, no resetting branches).
+
+Never commit secrets, API keys, .env files, or anything matching .gitignore.
+
+## Engineering Principles
+
+### Tests are required, not optional
+- Every new feature, bug fix, or non-trivial change ships with tests.
+- For new functionality, prefer test-first: write the test from the spec,
+  then implement until it passes.
+- A task is not "done" until the relevant tests pass. Do not report completion
+  with failing or skipped tests.
+- When fixing a bug, first write a test that reproduces the bug (and fails),
+  then fix it. This prevents regressions.
+- Keep the test suite fast. If a test is slow, isolate it (mark as integration
+  or e2e) so the default `test` command stays under 10 seconds for unit tests.
+
+### Tight feedback loops
+- Use strict typing everywhere (TypeScript strict mode / Pydantic / Zod —
+  whatever the stack supports). Type errors should surface immediately.
+- Run lint and typecheck before declaring a task complete.
+- Add structured logging at module boundaries from day one. When something
+  breaks, logs should narrow the cause in seconds, not minutes.
+- If a change requires manual verification (UI, integrations), state exactly
+  what to check and how — don't leave it implicit.
+
+### Spec before code for non-trivial work
+- For any task touching 3+ files, introducing a new module, or changing a
+  contract between components: produce a spec FIRST in plan mode. Do not
+  start editing until the user has approved the plan.
+- For significant architectural decisions, write a short ADR (Architecture
+  Decision Record) in `/docs/adr/` capturing: context, options considered,
+  decision, consequences. Reference the ADR in commit messages.
+- Read `/docs/` and `/specs/` (if they exist) before starting work. Those
+  files describe intent; the code describes implementation. Both matter.
+
+### Taste and restraint
+- Prefer the simplest solution that solves the problem. Resist adding
+  abstraction, config options, or framework features that aren't justified
+  by an actual requirement.
+- If a diff is getting large, stop and ask whether the task should be
+  decomposed into smaller commits.
+- Reuse existing patterns in the codebase before inventing new ones.
+
