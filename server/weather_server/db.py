@@ -1,7 +1,9 @@
 """SQLite layer for outdoor readings.
 
-Single table, one index, WAL mode. The schema mirrors 03-schema.md exactly.
-All conversions to derived values happen in derivations/ at request time.
+Single table, one index, WAL mode. The CREATE TABLE statement below is
+the canonical schema (an earlier docs/design/03-schema.md described it,
+but that design doc was deleted post-rebuild). All conversions to
+derived values happen in derivations/ at request time.
 
 This module uses Python's stdlib sqlite3. Connections are not pooled: the
 logger writes from one async task, request handlers read. SQLite + WAL

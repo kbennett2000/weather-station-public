@@ -12,15 +12,11 @@ The repo originally shipped a working but rough first version. A design pass has
 
 Before writing or running any code:
 
-1. `docs/design/README.md` — Map of the design docs (start here)
+1. `docs/design/README.md` — Two-file index of what survived the rebuild
 2. `docs/design/01-findings.md` — Original code review + **Decisions log** (the single most important section in the whole project)
-3. `docs/design/02-api-design.md` — HTTP API contract
-4. `docs/design/03-schema.md` — SQLite schema
-5. `docs/design/04-server-architecture.md` — Process model
-6. `docs/design/05-clients-scope.md` — Dashboard and widget scope
-7. `docs/design/06-dashboard-mockup.html` — Visual target for the dashboard (open in a browser to view)
+3. `docs/design/02-api-design.md` — HTTP API contract narrative (provenance, bucketing, naming rules)
 
-The decisions log in `01-findings.md` records *why* every major design choice was made. When in doubt, that's the place to look first.
+The decisions log in `01-findings.md` records *why* every major design choice was made. When in doubt, that's the place to look first. The other four design docs (schema, server architecture, clients scope, dashboard mockup) were deleted after the rebuild shipped — their content is now in the running code under [`server/`](server/), [`dashboard/`](dashboard/), and [`widget/`](widget/).
 
 ## Locked decisions — do not re-litigate
 
@@ -36,7 +32,7 @@ The following are settled. If you believe one is wrong, **surface it as a questi
 - **Timezone:** resolved dynamically via `timezonefinder` from outdoor GPS coordinates. No internet required.
 - **Dashboard port:** default 8005, configurable. No iptables redirect from port 80.
 - **Process model:** single FastAPI process. Two internal async tasks: outdoor logger loop + on-demand polling of indoor/basement with a 5s TTL cache.
-- **Visual aesthetic:** instrument-panel. Saira Stencil One for title, JetBrains Mono for readouts, IBM Plex Sans Condensed for labels. Warm amber on near-black. The mockup at `06-dashboard-mockup.html` is the **visual contract** — match it.
+- **Visual aesthetic:** instrument-panel. Saira Stencil One for title, JetBrains Mono for readouts, IBM Plex Sans Condensed for labels. Warm amber on near-black. The running dashboard at [`dashboard/`](dashboard/) is the visual reference now — match the existing style.
 - **Branding slots:** every place marked `[BRANDING]` in the mockup is a *placeholder* for the human to fill in with project-specific references. **Do not invent content for these slots.** Leave them visibly empty until the human supplies the text.
 
 ## Technology stack
@@ -60,11 +56,7 @@ weather-station-public/
 │   ├── design/                  # Read-only design inputs
 │   │   ├── README.md
 │   │   ├── 01-findings.md
-│   │   ├── 02-api-design.md
-│   │   ├── 03-schema.md
-│   │   ├── 04-server-architecture.md
-│   │   ├── 05-clients-scope.md
-│   │   └── 06-dashboard-mockup.html
+│   │   └── 02-api-design.md
 │   ├── phase2-verification.md   # On-hardware verification checklists
 │   └── phase5-verification.md
 ├── server/
@@ -129,9 +121,9 @@ Replace the fixture with real HTTP polling. The logger task starts writing real 
 
 ### Phase 3 — Dashboard rewrite
 
-Vanilla JS + Chart.js, served as static files by FastAPI. The implementation matches `06-dashboard-mockup.html` — that mockup is the visual contract. All data comes from `/api/v1/current` and `/api/v1/history/outdoor`. Time-window selector wired up (1h/6h/12h/24h/7d). Polar sky plot and day arc render with real data.
+Vanilla JS + Chart.js, served as static files by FastAPI. The implementation followed `06-dashboard-mockup.html` (since deleted post-rebuild — the running dashboard at [`dashboard/`](dashboard/) is the visual reference now). All data comes from `/api/v1/current` and `/api/v1/history/outdoor`. Time-window selector wired up (1h/6h/12h/24h/7d). Polar sky plot and day arc render with real data.
 
-**Done when:** the dashboard loaded in a browser matches the mockup visually, shows live data, and the time-window selector changes the charts.
+**Done when:** the dashboard loads in a browser, shows live data, and the time-window selector changes the charts.
 
 ### Phase 4 — Widget rewrite
 
