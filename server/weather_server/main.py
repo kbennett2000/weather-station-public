@@ -1,0 +1,147 @@
+"""FastAPI app entry point.
+
+Lifespan responsibilities:
+- Load config from weather.toml (or $WEATHER_CONFIG).
+- Open SQLite, apply pragmas, ensure schema.
+- Build a SensorSource (fixture mode in Phase 1).
+- Spawn the outdoor logger task; cancel and await on shutdown.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+
+from . import __version__
+from .cache import TTLCache
+from .config import load_config
+from .db import init_db
+from .logger_task import outdoor_logger_loop
+from .routes import astronomy, current, health, history, sensors
+from .schemas import ErrorBody, ErrorResponse
+from .sensors import make_source
+
+log = logging.getLogger(__name__)
+
+CONFIG_ENV = "WEATHER_CONFIG"
+DEFAULT_CONFIG_PATH = "weather.toml"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    config_path = os.environ.get(CONFIG_ENV, DEFAULT_CONFIG_PATH)
+    log.info("loading config from %s", config_path)
+    config = load_config(config_path)
+
+    db_conn = init_db(config.server.db_path)
+    cache = TTLCache(default_ttl=config.cache.ttl_seconds)
+    source = make_source(config.development.fixture_dir)
+
+    app.state.config = config
+    app.state.db = db_conn
+    app.state.cache = cache
+    app.state.source = source
+    app.state.last_seen = {}
+
+    logger_task = asyncio.create_task(outdoor_logger_loop(config, source, db_conn))
+    app.state.logger_task = logger_task
+
+    try:
+        yield
+    finally:
+        logger_task.cancel()
+        try:
+            await logger_task
+        except asyncio.CancelledError:
+            pass
+        db_conn.close()
+        log.info("shutdown complete")
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="Jones Big Ass Weather API",
+        version=__version__,
+        description=(
+            "Read-only HTTP API for weather sensor data. "
+            "See docs/design/02-api-design.md for the full contract."
+        ),
+        lifespan=lifespan,
+        responses={
+            400: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            500: {"model": ErrorResponse},
+            503: {"model": ErrorResponse},
+        },
+    )
+
+    app.include_router(current.router, tags=["current"])
+    app.include_router(history.router, tags=["history"])
+    app.include_router(sensors.router, tags=["sensors"])
+    app.include_router(astronomy.router, tags=["astronomy"])
+    app.include_router(health.router, tags=["health"])
+
+    @app.exception_handler(HTTPException)
+    async def _http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
+        code, message = _classify(exc)
+        body = ErrorResponse(error=ErrorBody(code=code, message=message))
+        return JSONResponse(status_code=exc.status_code, content=body.model_dump(mode="json"))
+
+    return app
+
+
+def _classify(exc: HTTPException) -> tuple[str, str]:
+    """Translate an HTTPException's detail tuple to the (code, message)
+    pair documented in 02-api-design.md."""
+    detail = exc.detail
+    if isinstance(detail, tuple) and len(detail) >= 1:
+        code = str(detail[0])
+        arg = detail[1] if len(detail) > 1 else None
+        return code, _message_for(code, arg)
+    # Fallback for unstructured raises (e.g. FastAPI's own 422 validation).
+    if exc.status_code == 404:
+        return "not_found", str(detail)
+    if exc.status_code == 400:
+        return "bad_request", str(detail)
+    if exc.status_code == 503:
+        return "db_unavailable", str(detail)
+    return "internal_error", str(detail)
+
+
+def _message_for(code: str, arg: object) -> str:
+    if code == "sensor_not_found":
+        return f"No sensor with id {arg!r} is registered."
+    if code == "history_not_available":
+        return f"History is not available for sensor {arg!r} (only outdoor is logged)."
+    if code == "sensor_no_data":
+        return f"Sensor {arg!r} has not reported any data yet."
+    if code == "bad_request":
+        return str(arg) if arg is not None else "Bad request."
+    return code.replace("_", " ").capitalize()
+
+
+app = create_app()
+
+
+def run() -> None:
+    """Entry point for `weather-server` console script."""
+    import uvicorn
+
+    config_path = os.environ.get(CONFIG_ENV, DEFAULT_CONFIG_PATH)
+    config = load_config(config_path)
+    uvicorn.run(
+        "weather_server.main:app",
+        host=config.server.host,
+        port=config.server.port,
+        log_level="info",
+    )
+
+
+if __name__ == "__main__":
+    run()

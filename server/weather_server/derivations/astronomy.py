@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -32,26 +32,26 @@ E = RAD * 23.4397
 
 def _to_julian(d: datetime) -> float:
     if d.tzinfo is None:
-        d = d.replace(tzinfo=timezone.utc)
-    delta = d - datetime(1970, 1, 1, tzinfo=timezone.utc)
+        d = d.replace(tzinfo=UTC)
+    delta = d - datetime(1970, 1, 1, tzinfo=UTC)
     return delta.total_seconds() / DAY_S - 0.5 + J1970
 
 
 def _from_julian(j: float) -> datetime:
     seconds = (j + 0.5 - J1970) * DAY_S
-    return datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=seconds)
+    return datetime(1970, 1, 1, tzinfo=UTC) + timedelta(seconds=seconds)
 
 
 def _to_days(d: datetime) -> float:
     return _to_julian(d) - J2000
 
 
-def _right_ascension(l: float, b: float) -> float:
-    return math.atan2(math.sin(l) * math.cos(E) - math.tan(b) * math.sin(E), math.cos(l))
+def _right_ascension(lon: float, b: float) -> float:
+    return math.atan2(math.sin(lon) * math.cos(E) - math.tan(b) * math.sin(E), math.cos(lon))
 
 
-def _declination(l: float, b: float) -> float:
-    return math.asin(math.sin(b) * math.cos(E) + math.cos(b) * math.sin(E) * math.sin(l))
+def _declination(lon: float, b: float) -> float:
+    return math.asin(math.sin(b) * math.cos(E) + math.cos(b) * math.sin(E) * math.sin(lon))
 
 
 def _azimuth(h: float, phi: float, dec: float) -> float:
@@ -78,8 +78,8 @@ def _ecliptic_longitude(m: float) -> float:
 
 def _sun_coords(d: float) -> tuple[float, float]:
     m = _solar_mean_anomaly(d)
-    l = _ecliptic_longitude(m)
-    return _declination(l, 0), _right_ascension(l, 0)
+    ec_lon = _ecliptic_longitude(m)
+    return _declination(ec_lon, 0), _right_ascension(ec_lon, 0)
 
 
 def _moon_coords(d: float) -> tuple[float, float, float]:
@@ -130,18 +130,22 @@ def _approx_transit(ht: float, lw: float, n: float) -> float:
     return _J0 + (ht + lw) / (2 * PI) + n
 
 
-def _solar_transit_j(ds: float, m: float, l: float) -> float:
-    return J2000 + ds + 0.0053 * math.sin(m) - 0.0069 * math.sin(2 * l)
+def _solar_transit_j(ds: float, m: float, ec_lon: float) -> float:
+    return J2000 + ds + 0.0053 * math.sin(m) - 0.0069 * math.sin(2 * ec_lon)
 
 
 def _hour_angle(h: float, phi: float, dec: float) -> float:
-    return math.acos((math.sin(h) - math.sin(phi) * math.sin(dec)) / (math.cos(phi) * math.cos(dec)))
+    return math.acos(
+        (math.sin(h) - math.sin(phi) * math.sin(dec)) / (math.cos(phi) * math.cos(dec))
+    )
 
 
-def _get_set_j(h: float, lw: float, phi: float, dec: float, n: float, m: float, l: float) -> float:
+def _get_set_j(
+    h: float, lw: float, phi: float, dec: float, n: float, m: float, ec_lon: float
+) -> float:
     w = _hour_angle(h, phi, dec)
     a = _approx_transit(w, lw, n)
-    return _solar_transit_j(a, m, l)
+    return _solar_transit_j(a, m, ec_lon)
 
 
 @dataclass(frozen=True)
@@ -285,7 +289,7 @@ def moon_times(d: datetime, lat: float, lon: float) -> dict[str, Any]:
     """
     t = d.replace(hour=0, minute=0, second=0, microsecond=0)
     if t.tzinfo is None:
-        t = t.replace(tzinfo=timezone.utc)
+        t = t.replace(tzinfo=UTC)
     hc = 0.133 * RAD
     h0 = moon_position(t, lat, lon).altitude_deg * RAD - hc
     rise: float | None = None

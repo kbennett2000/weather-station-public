@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from weather_server.derivations import astronomy
-
 
 DENVER_LAT = 39.7392
 DENVER_LON = -104.9903
@@ -12,7 +11,7 @@ DENVER_LON = -104.9903
 @pytest.fixture
 def summer_noon_utc() -> datetime:
     # 2026-06-21 19:00 UTC ≈ 13:00 Mountain Daylight (solar noon-ish in Denver)
-    return datetime(2026, 6, 21, 19, 0, 0, tzinfo=timezone.utc)
+    return datetime(2026, 6, 21, 19, 0, 0, tzinfo=UTC)
 
 
 def test_sun_position_high_at_summer_noon(summer_noon_utc: datetime) -> None:
@@ -21,7 +20,7 @@ def test_sun_position_high_at_summer_noon(summer_noon_utc: datetime) -> None:
 
 
 def test_sun_position_below_horizon_at_midnight() -> None:
-    midnight = datetime(2026, 6, 22, 7, 0, 0, tzinfo=timezone.utc)  # 1 AM local
+    midnight = datetime(2026, 6, 22, 7, 0, 0, tzinfo=UTC)  # 1 AM local
     pos = astronomy.sun_position(midnight, DENVER_LAT, DENVER_LON)
     assert pos.altitude_deg < 0
 

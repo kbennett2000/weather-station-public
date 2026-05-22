@@ -1,0 +1,313 @@
+"""Compose API response objects from DB rows, live payloads, and config.
+
+Centralized here so all routes produce identical shapes for the same
+inputs. Each `build_*` function returns a Pydantic model from schemas.py.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from datetime import UTC, datetime
+from typing import Any
+
+from .config import Config, SensorConfig
+from .derivations import astronomy as astro
+from .derivations import location as loc
+from .derivations import readings as rd
+from .schemas import (
+    Astronomy,
+    CalibrationBlock,
+    DerivedReading,
+    DeviceBlock,
+    LocationBlock,
+    MoonBlock,
+    RawReading,
+    ReferenceLocation,
+    SensorReading,
+    SunBlock,
+)
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+# ── sensor readings ─────────────────────────────────────────────────────────
+
+
+def build_outdoor_reading_from_db_row(
+    sensor: SensorConfig,
+    row: sqlite3.Row,
+    server_time: datetime,
+) -> SensorReading:
+    reading_ts = datetime.fromtimestamp(int(row["timestamp"]), tz=UTC)
+    age = (server_time - reading_ts).total_seconds()
+    online = age < sensor.online_threshold_seconds
+
+    payload = _row_to_payload(row)
+    return _build_reading(sensor, payload, reading_ts, age, online)
+
+
+def build_live_reading(
+    sensor: SensorConfig,
+    payload: dict[str, Any],
+    last_seen_at: datetime,
+    server_time: datetime,
+) -> SensorReading:
+    age = (server_time - last_seen_at).total_seconds()
+    online = age < sensor.online_threshold_seconds
+    return _build_reading(sensor, payload, last_seen_at, age, online)
+
+
+def _build_reading(
+    sensor: SensorConfig,
+    payload: dict[str, Any],
+    reading_ts: datetime,
+    age: float,
+    online: bool,
+) -> SensorReading:
+    derived = rd.derive_reading(
+        payload,
+        temp_offset_c=sensor.temp_offset_c,
+        fallback_altitude_m=sensor.fallback_altitude_m,
+    )
+    raw_block = rd.map_raw(payload)
+    location_block = _build_location_block(payload) if sensor.has_gps else None
+    device_block = _build_device_block(payload)
+
+    return SensorReading(
+        sensor_id=sensor.id,
+        role=sensor.role,
+        online=online,
+        reading_timestamp=reading_ts,
+        age_seconds=round(age, 1),
+        raw=RawReading(**raw_block),
+        calibration=CalibrationBlock(temp_offset_c=sensor.temp_offset_c),
+        derived=DerivedReading(**derived),
+        location=location_block,
+        device=device_block,
+    )
+
+
+def _row_to_payload(row: sqlite3.Row) -> dict[str, Any]:
+    payload = {k: row[k] for k in row.keys() if k not in {"id", "timestamp"}}
+    return {k: v for k, v in payload.items() if v is not None}
+
+
+def _build_location_block(payload: dict[str, Any]) -> LocationBlock | None:
+    lat = payload.get("latitude")
+    lon = payload.get("longitude")
+    alt_m = payload.get("altitude_m")
+    block: dict[str, Any] = {
+        "lat": lat,
+        "lon": lon,
+        "altitude_m": alt_m,
+        "satellites": payload.get("satellites"),
+        "speed_kmh": payload.get("speed_kmh"),
+        "course_deg": payload.get("course_deg"),
+    }
+    if alt_m is not None:
+        block["altitude_ft"] = loc.altitude_m_to_ft(alt_m)
+    if lat is not None and lon is not None:
+        block["dms"] = loc.decimal_to_dms(lat, lon)
+        block["maidenhead"] = loc.maidenhead(lat, lon)
+    return LocationBlock(**block)
+
+
+def _build_device_block(payload: dict[str, Any]) -> DeviceBlock:
+    return DeviceBlock(
+        rssi_dbm=payload.get("rssi_dbm"),
+        uptime_s=payload.get("uptime_s"),
+        free_heap_bytes=payload.get("free_heap_bytes"),
+    )
+
+
+# ── astronomy ───────────────────────────────────────────────────────────────
+
+
+def build_astronomy(
+    server_time: datetime,
+    config: Config,
+    outdoor_reading: SensorReading | None,
+    *,
+    lat_override: float | None = None,
+    lon_override: float | None = None,
+) -> Astronomy:
+    lat, lon, source = _resolve_reference_location(
+        config, outdoor_reading, lat_override, lon_override
+    )
+    tz_name = astro.resolve_timezone(lat, lon)
+    local_time = astro.to_local(server_time, tz_name) if tz_name != "UTC" else server_time
+
+    if lat is None or lon is None:
+        sun = SunBlock()
+        moon = MoonBlock()
+    else:
+        sun = _build_sun_block(server_time, lat, lon)
+        moon = _build_moon_block(server_time, lat, lon)
+
+    return Astronomy(
+        server_time=server_time,
+        local_time=local_time,
+        timezone=tz_name,
+        reference_location=ReferenceLocation(lat=lat, lon=lon, source=source),
+        sun=sun,
+        moon=moon,
+    )
+
+
+def _resolve_reference_location(
+    config: Config,
+    outdoor_reading: SensorReading | None,
+    lat_override: float | None,
+    lon_override: float | None,
+) -> tuple[float | None, float | None, str]:
+    if lat_override is not None and lon_override is not None:
+        return lat_override, lon_override, "query_override"
+
+    if (
+        outdoor_reading is not None
+        and outdoor_reading.location is not None
+        and outdoor_reading.location.lat is not None
+        and outdoor_reading.location.lon is not None
+    ):
+        return (
+            outdoor_reading.location.lat,
+            outdoor_reading.location.lon,
+            "outdoor_sensor",
+        )
+
+    outdoor_cfg = config.outdoor
+    if outdoor_cfg is not None and outdoor_cfg.fallback_altitude_m is not None:
+        # No explicit fallback lat/lon in the current config schema; if a
+        # deployment cares it can extend SensorConfig. For now, no fallback
+        # location means "no astronomy possible".
+        pass
+    return None, None, "config_default"
+
+
+def _build_sun_block(server_time: datetime, lat: float, lon: float) -> SunBlock:
+    pos = astro.sun_position(server_time, lat, lon)
+    times = astro.sun_times(server_time, lat, lon)
+
+    day_length: float | None = None
+    if times.sunrise is not None and times.sunset is not None:
+        day_length = (times.sunset - times.sunrise).total_seconds()
+
+    secs_to_sunset: float | None = None
+    secs_to_sunrise: float | None = None
+    if times.sunset is not None:
+        delta = (times.sunset - server_time).total_seconds()
+        if delta >= 0:
+            secs_to_sunset = delta
+    if secs_to_sunset is None and times.sunrise is not None:
+        # After sunset → count to tomorrow's sunrise.
+        # Approximate by adding 24h to today's sunrise if it's already past.
+        from datetime import timedelta
+
+        tomorrow_sunrise = (
+            times.sunrise if times.sunrise > server_time else times.sunrise + timedelta(days=1)
+        )
+        secs_to_sunrise = (tomorrow_sunrise - server_time).total_seconds()
+
+    return SunBlock(
+        altitude_deg=pos.altitude_deg,
+        azimuth_deg=pos.azimuth_deg,
+        is_daytime=pos.altitude_deg > 0,
+        sunrise=times.sunrise,
+        sunset=times.sunset,
+        solar_noon=times.solar_noon,
+        dawn=times.dawn,
+        dusk=times.dusk,
+        day_length_seconds=day_length,
+        seconds_to_sunset=secs_to_sunset,
+        seconds_to_sunrise=secs_to_sunrise,
+    )
+
+
+def _build_moon_block(server_time: datetime, lat: float, lon: float) -> MoonBlock:
+    pos = astro.moon_position(server_time, lat, lon)
+    illum = astro.moon_illumination(server_time)
+    times = astro.moon_times(server_time, lat, lon)
+    return MoonBlock(
+        altitude_deg=pos.altitude_deg,
+        azimuth_deg=pos.azimuth_deg,
+        distance_km=pos.distance_km,
+        illumination_pct=illum.fraction * 100.0,
+        phase_name=astro.moon_phase_name(illum.phase),
+        phase_icon=astro.moon_phase_icon(illum.phase),
+        moonrise=times.get("rise"),
+        moonset=times.get("set"),
+        always_up=bool(times.get("always_up", False)),
+        always_down=bool(times.get("always_down", False)),
+    )
+
+
+# ── history rows ────────────────────────────────────────────────────────────
+
+
+HISTORY_GROUPS = {
+    "weather": (
+        "temperature_c",
+        "temperature_f",
+        "humidity_pct",
+        "pressure_station_hpa",
+        "pressure_sealevel_hpa",
+        "dewpoint_c",
+    ),
+    "light": ("lux", "ir", "visible", "full"),
+    "location": ("lat", "lon", "altitude_m", "satellites", "maidenhead"),
+    "device": ("rssi_dbm", "uptime_s", "free_heap_bytes"),
+}
+
+
+def build_history_row(
+    row: sqlite3.Row,
+    sensor: SensorConfig,
+    include_groups: set[str],
+) -> dict[str, Any]:
+    ts = datetime.fromtimestamp(int(row["timestamp"]), tz=UTC)
+    payload = _row_to_payload(row)
+    derived = rd.derive_reading(
+        payload,
+        temp_offset_c=sensor.temp_offset_c,
+        fallback_altitude_m=sensor.fallback_altitude_m,
+    )
+
+    out: dict[str, Any] = {"timestamp": ts}
+
+    if "weather" in include_groups:
+        for k in HISTORY_GROUPS["weather"]:
+            v = derived.get(k) if k in derived else payload.get(k)
+            if v is not None:
+                out[k] = v
+
+    if "light" in include_groups:
+        # `full_spectrum` in payload maps to `full` in the row.
+        if "lux" in payload:
+            out["lux"] = payload["lux"]
+        if "ir" in payload:
+            out["ir"] = payload["ir"]
+        if "visible" in payload:
+            out["visible"] = payload["visible"]
+        if "full_spectrum" in payload:
+            out["full"] = payload["full_spectrum"]
+
+    if "location" in include_groups:
+        if "latitude" in payload:
+            out["lat"] = payload["latitude"]
+        if "longitude" in payload:
+            out["lon"] = payload["longitude"]
+        if "altitude_m" in payload:
+            out["altitude_m"] = payload["altitude_m"]
+        if "satellites" in payload:
+            out["satellites"] = payload["satellites"]
+        if payload.get("latitude") is not None and payload.get("longitude") is not None:
+            out["maidenhead"] = loc.maidenhead(payload["latitude"], payload["longitude"])
+
+    if "device" in include_groups:
+        for k in ("rssi_dbm", "uptime_s", "free_heap_bytes"):
+            if k in payload:
+                out[k] = payload[k]
+
+    return out

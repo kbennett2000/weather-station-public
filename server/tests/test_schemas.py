@@ -2,7 +2,7 @@
 02-api-design.md. If these tests break, either the spec changed or a model
 drifted — both want a human eye."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -75,7 +75,9 @@ def test_sensor_reading_indoor_has_no_location_or_light() -> None:
 
 
 def test_extra_field_in_strict_model_rejected() -> None:
-    with pytest.raises(Exception):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
         schemas.SensorReading.model_validate(
             {
                 "sensor_id": "x",
@@ -158,7 +160,7 @@ def test_astronomy_full_shape() -> None:
 def test_health_response_shape() -> None:
     payload = {
         "ok": True,
-        "server_time": datetime(2026, 5, 22, 15, 30, 28, tzinfo=timezone.utc),
+        "server_time": datetime(2026, 5, 22, 15, 30, 28, tzinfo=UTC),
         "db_reachable": True,
         "sensors": [
             {"sensor_id": "outdoor", "online": True, "age_seconds": 28},
