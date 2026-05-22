@@ -1,1 +1,33 @@
 node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+*.egg
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local config + DB
+server/weather.toml
+server/*.db
+server/*.db-wal
+server/*.db-shm
+widget/config.toml
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
