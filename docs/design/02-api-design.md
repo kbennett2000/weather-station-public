@@ -262,6 +262,8 @@ Latest reading from one named sensor, plus the astronomy block.
 
 **Response 404:** unknown `sensor_id`.
 
+**Response 503:** the sensor is registered but has never reported and is currently unreachable, so there is no last-known reading to return. `code: "sensor_no_data"`. Once at least one successful poll has been recorded, subsequent upstream failures return `200` with the last-known `SensorReading` and `online: false`.
+
 ---
 
 ### `GET /api/v1/history/{sensor_id}`
@@ -451,6 +453,7 @@ Standard shape for all errors:
 | 404 | `history_not_available` | `sensor_id` is valid but is not logged (only `outdoor` is) |
 | 500 | `internal_error` | Uncaught exception (logged server-side) |
 | 503 | `db_unavailable` | SQLite open failed or DB file missing |
+| 503 | `sensor_no_data` | `GET /current/{sensor_id}`: the sensor has never successfully reported and is currently unreachable. Once any successful poll has been recorded, later failures return `200` with the last-known reading and `online: false` instead. |
 
 ---
 
