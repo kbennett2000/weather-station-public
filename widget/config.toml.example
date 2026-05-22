@@ -9,7 +9,7 @@
 
 # Base URL of the weather server. The widget hits {server_url}/api/v1/current
 # every refresh interval, and "Open dashboard" opens this URL in the browser.
-server_url = "http://192.168.1.62:8005"
+server_url = "http://localhost:8005"
 
 # How often to refresh, in seconds. 30 matches the legacy widget's cadence.
 refresh_seconds = 30
