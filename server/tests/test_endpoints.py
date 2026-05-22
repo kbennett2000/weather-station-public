@@ -4,12 +4,13 @@ These tests start the app with the example config + fixture dir and
 exercise every endpoint, asserting response shape against the Pydantic
 models (which already mirror 02-api-design.md exactly) plus the
 documented error cases.
+
+The `client` fixture lives in conftest.py.
 """
 
 from __future__ import annotations
 
 import shutil
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -19,71 +20,6 @@ from weather_server import schemas
 
 SERVER_ROOT = Path(__file__).parent.parent
 FIXTURE_SRC = SERVER_ROOT / "fixtures"
-TOML_TEMPLATE = """
-[server]
-host = "127.0.0.1"
-port = 8005
-db_path = "{db_path}"
-
-[logger]
-interval_seconds = 60
-http_timeout_seconds = 10
-
-[cache]
-ttl_seconds = 5
-
-[development]
-fixture_dir = "{fixture_dir}"
-
-[[sensors]]
-id = "outdoor"
-role = "outdoor"
-ip = "192.168.1.60"
-has_gps = true
-has_light = true
-online_threshold_seconds = 120
-temp_offset_c = -0.5
-fallback_altitude_m = 1609.3
-
-[[sensors]]
-id = "indoor"
-role = "indoor"
-ip = "192.168.1.61"
-has_gps = false
-has_light = false
-online_threshold_seconds = 120
-temp_offset_c = 0.0
-
-[[sensors]]
-id = "basement"
-role = "indoor"
-ip = "192.168.1.63"
-has_gps = false
-has_light = false
-online_threshold_seconds = 300
-temp_offset_c = 0.0
-"""
-
-
-@pytest.fixture
-def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    fixture_dir = tmp_path / "fixtures"
-    shutil.copytree(FIXTURE_SRC, fixture_dir)
-
-    db_path = tmp_path / "weather.db"
-    cfg = tmp_path / "weather.toml"
-    cfg.write_text(
-        TOML_TEMPLATE.format(db_path=str(db_path), fixture_dir=str(fixture_dir))
-    )
-
-    monkeypatch.setenv("WEATHER_CONFIG", str(cfg))
-
-    # Re-import to pick up the env var via lifespan.
-    from weather_server.main import create_app
-
-    app = create_app()
-    with TestClient(app) as tc:
-        yield tc
 
 
 def test_current_endpoint_returns_documented_shape(client: TestClient) -> None:
@@ -227,7 +163,12 @@ def test_offline_sensor_returns_503_when_never_seen(
 
     db_path = tmp_path / "weather.db"
     cfg = tmp_path / "weather.toml"
-    cfg.write_text(TOML_TEMPLATE.format(db_path=str(db_path), fixture_dir=str(fixture_dir)))
+    from tests.conftest import BRANDING_EXAMPLE, TOML_TEMPLATE
+    cfg.write_text(TOML_TEMPLATE.format(
+        db_path=str(db_path),
+        fixture_dir=str(fixture_dir),
+        branding_path=str(BRANDING_EXAMPLE),
+    ))
     monkeypatch.setenv("WEATHER_CONFIG", str(cfg))
 
     from weather_server.main import create_app

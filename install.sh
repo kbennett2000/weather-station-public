@@ -146,6 +146,15 @@ else
     SEEDED_SERVER_CONFIG=false
 fi
 
+if [[ ! -f "$REPO_DIR/branding.toml" ]]; then
+    echo "==> Seeding branding.toml from branding.toml.example…"
+    sudo -u "$INSTALL_USER" cp \
+        "$REPO_DIR/branding.toml.example" \
+        "$REPO_DIR/branding.toml"
+else
+    echo "==> branding.toml already exists, leaving it alone."
+fi
+
 if $WITH_WIDGET && [[ ! -f "$REPO_DIR/widget/config.toml" ]]; then
     echo "==> Seeding widget/config.toml from config.toml.example…"
     sudo -u "$INSTALL_USER" cp \
@@ -231,6 +240,9 @@ Next steps:
      fallback_lat / fallback_lon for your sensors. The example file
      uses fixture mode for offline testing; comment out the
      [development] block to poll real ESP32s.
+  1b. Edit $REPO_DIR/branding.toml to fill in the [BRANDING] slots
+     on the dashboard (taglines, footer, offline-state copy, etc.).
+     Optional but recommended.
 EOF
 
 if $DO_SYSTEMD; then

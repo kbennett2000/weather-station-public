@@ -286,6 +286,67 @@ function xForTimeOfDay(iso) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// /api/v1/branding — load once on page boot
+// Populates static slots, picks a random rotating tagline per load,
+// and stashes the offline/loading/error copy for later use by panel
+// renderers and the data-status banner.
+// ─────────────────────────────────────────────────────────────────
+
+let brandingCopy = {
+  states: {},
+  error: { generic: '' },
+};
+
+async function loadBranding() {
+  let data;
+  try {
+    data = await fetchJson('/api/v1/branding');
+  } catch (e) {
+    console.warn('branding fetch failed:', e);
+    return;
+  }
+
+  if (data?.browser_title?.text) {
+    document.title = data.browser_title.text;
+  }
+
+  // Tagline: random from rotating[] when populated, else static fallback.
+  const rotating = Array.isArray(data?.taglines?.rotating) ? data.taglines.rotating : [];
+  const pick = rotating.length > 0
+    ? rotating[Math.floor(Math.random() * rotating.length)]
+    : (data?.header?.tagline || '');
+  if (pick) setText('branding-tagline', pick);
+
+  if (data?.footer?.text)              setText('branding-footer', data.footer.text);
+  if (data?.states?.outdoor_offline)   setText('outdoor-branding', data.states.outdoor_offline);
+  if (data?.states?.indoor_offline)    setText('indoor-branding',  data.states.indoor_offline);
+  if (data?.states?.basement_offline)  setText('basement-branding', data.states.basement_offline);
+
+  brandingCopy = {
+    states: data?.states || {},
+    error:  data?.error  || { generic: '' },
+  };
+
+  // Show the loading banner until the first /current succeeds.
+  if (brandingCopy.states.loading) {
+    showDataStatus(brandingCopy.states.loading, false);
+  }
+}
+
+function showDataStatus(text, isError) {
+  const el = $('data-status');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('error', !!isError);
+  el.hidden = false;
+}
+
+function hideDataStatus() {
+  const el = $('data-status');
+  if (el) el.hidden = true;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // /api/v1/current — populate every panel
 // ─────────────────────────────────────────────────────────────────
 
@@ -296,9 +357,13 @@ async function refreshCurrent() {
   } catch (e) {
     console.warn('current fetch failed:', e);
     setLed('led-db', 'fault');
+    if (brandingCopy.error?.generic) {
+      showDataStatus(brandingCopy.error.generic, true);
+    }
     return;
   }
   setLed('led-db', 'on');
+  hideDataStatus();
 
   timezone = data.astronomy?.timezone || 'UTC';
   anchorServerTime(data.server_time);
@@ -617,6 +682,7 @@ function wireWindowBar() {
 function start() {
   initCharts();
   wireWindowBar();
+  loadBranding();          // fire-and-forget; static slots populate when it resolves
   refreshCurrent();
   refreshHistory();
   setInterval(refreshCurrent, CURRENT_REFRESH_MS);

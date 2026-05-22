@@ -27,7 +27,7 @@
 
     <div class="header-meta">
       <div class="tagline">
-        // <span class="tagline-text">[BRANDING — rotating Jones-ism slot]</span>
+        // <span class="tagline-text" id="branding-tagline">[BRANDING — rotating Jones-ism slot]</span>
       </div>
       <div class="tagline" style="margin-top: 8px; color: var(--text-dim);">
         SERVER &nbsp;<span style="color: var(--cool)" id="server-addr">--</span>&nbsp;&nbsp; TZ &nbsp;<span style="color: var(--text)" id="server-tz">--</span>
@@ -46,6 +46,9 @@
       </div>
     </div>
   </header>
+
+  <!-- DATA STATUS — hidden by default; shows on initial load and on fetch errors -->
+  <div id="data-status" class="data-status" hidden></div>
 
   <!-- MAIN GRID -->
   <div class="grid">
@@ -86,6 +89,10 @@
             <div class="metric-value"><span id="out-press-st-inhg">--</span><span style="font-size:14px;color:var(--text-dim)"> inHg</span></div>
             <div class="metric-sub"><span id="out-press-st-hpa">--</span> hPa · <span id="out-alt-m">--</span> m alt</div>
           </div>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);letter-spacing:0.1em;padding-top:10px;grid-column:1/-1">
+          <!-- [BRANDING] outdoor-state slot -->
+          // <span id="outdoor-branding"></span>
         </div>
       </div>
     </section>
@@ -220,6 +227,10 @@
         <div class="metric">
           <div class="metric-label">Pressure</div>
           <div class="metric-value" style="font-size:18px"><span id="in-press-inhg">--</span><span style="font-size:11px;color:var(--text-dim)"> inHg</span></div>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);letter-spacing:0.1em;padding-top:6px">
+          <!-- [BRANDING] indoor-state slot -->
+          // <span id="indoor-branding"></span>
         </div>
       </div>
     </section>
@@ -435,7 +446,7 @@
     <div>JBA-WX · BUILT FROM PARTS · NO CLOUD · NO ADS · NO BS</div>
     <div class="footer-branding">
       <!-- [BRANDING] footer slot -->
-      [BRANDING — footer reference goes here]
+      <span id="branding-footer">[BRANDING — footer reference goes here]</span>
     </div>
     <div>v2.0 · MIT</div>
   </footer>

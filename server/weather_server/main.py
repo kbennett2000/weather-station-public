@@ -21,11 +21,12 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .branding import load_branding
 from .cache import TTLCache
 from .config import load_config
 from .db import init_db
 from .logger_task import outdoor_logger_loop
-from .routes import astronomy, current, health, history, sensors
+from .routes import astronomy, branding, current, health, history, sensors
 from .schemas import ErrorBody, ErrorResponse
 from .sensors import make_source
 
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.cache = cache
     app.state.source = source
     app.state.last_seen = {}
+    app.state.branding = load_branding(config.server.branding_path)
 
     logger_task = asyncio.create_task(outdoor_logger_loop(config, source, db_conn))
     app.state.logger_task = logger_task
@@ -90,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(history.router, tags=["history"])
     app.include_router(sensors.router, tags=["sensors"])
     app.include_router(astronomy.router, tags=["astronomy"])
+    app.include_router(branding.router, tags=["branding"])
     app.include_router(health.router, tags=["health"])
 
     @app.get("/", include_in_schema=False)

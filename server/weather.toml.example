@@ -5,7 +5,8 @@
 host = "0.0.0.0"
 port = 8005
 db_path = "weather.db"
-dashboard_dir = "../dashboard"  # relative to the working directory the server is launched from
+dashboard_dir = "../dashboard"   # relative to the working directory the server is launched from
+branding_path = "../branding.toml"  # ditto; falls back to branding.toml.example if missing
 
 [logger]
 interval_seconds = 60

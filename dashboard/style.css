@@ -720,6 +720,25 @@ body::after {
   letter-spacing: 0.05em;
 }
 
+.data-status {
+  margin: 0 24px 12px;
+  padding: 8px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.data-status.error {
+  color: #ff8a6b;
+  border-color: rgba(255, 138, 107, 0.4);
+  background: rgba(255, 138, 107, 0.08);
+}
+
 /* RESPONSIVE */
 
 @media (max-width: 1280px) {

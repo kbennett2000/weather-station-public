@@ -20,6 +20,7 @@ class ServerConfig:
     port: int = 8005
     db_path: str = "weather.db"
     dashboard_dir: str = "../dashboard"
+    branding_path: str = "../branding.toml"
 
 
 @dataclass(frozen=True)
