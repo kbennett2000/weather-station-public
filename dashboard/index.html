@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JBA-WX // Weather Station</title>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=JetBrains+Mono:wght@300;400;500;700&family=IBM+Plex+Sans+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
+<!-- Fonts and Chart.js are vendored under dashboard/vendor/ so the
+     dashboard works on a LAN with no internet access. The original CDN
+     URLs were https://cdn.jsdelivr.net/... and https://fonts.googleapis.com/...
+     — see dashboard/vendor/ for snapshots and a refresh script. -->
+<link rel="stylesheet" href="vendor/fonts.css">
 <link rel="stylesheet" href="style.css">
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="vendor/chart.umd.min.js"></script>
 </head>
 <body>
 
