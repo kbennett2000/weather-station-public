@@ -30,7 +30,7 @@ If you’re new here (and even if you ain’t), read these three docs **in order
 | [`Makefile`](Makefile) | Developer commands: `make dev`, `make test`, `make widget`, `make help`. |
 | [`docs/`](docs/)      | The three end-user docs above, plus design history under [`docs/design/`](docs/design/) and on-hardware verification checklists. |
 
-## Minimum Quick Start (Retard-Proof Version)
+## Minimum Quick Start 
 
 ```bash
 git clone https://github.com/kbennett2000/weather-station-public.git
