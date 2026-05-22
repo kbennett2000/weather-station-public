@@ -167,10 +167,18 @@ Rewrite `installScriptUbuntu.sh` as `install.sh`. Install the new stack (FastAPI
 ## Current state
 
 - Design phase: **complete**.
-- Implementation phase: **not yet started**.
-- Existing legacy code in the repo has not been touched yet.
+- Implementation phase: **complete**. All six phases shipped:
+  - Phase 1 — FastAPI server + fixture-mode logger
+  - Phase 2 — real ESP32 polling, ESP32 wire-format adapter, SQLite logging
+  - Phase 3 — vanilla-JS dashboard against the live API
+  - Phase 4 — GTK tray widget reads `/api/v1/current` (961 → ~400 lines)
+  - Phase 4.5 — server emits sun/moon timestamps in the resolved local zone
+  - Phase 5 — ESP32 sketch cleanup (drop inline HTML, drop /setOffset, BUG-08 fixed at source, sketches renamed to `outdoor.ino` / `indoor.ino` / `basement.ino`)
+  - Phase 6 — `install.sh`, systemd unit, README rewrite, legacy files removed
+- Legacy code removed: `weatherProxy.py`, `weatherLogger_*.py`, `dashboard.html`, `weatherAnalysis.js`, `weather_tray.py` (root), `installScriptUbuntu.sh`, `js/`, and the two non-FreeRTOS sketches.
+- Outstanding (pre-existing, not in scope for the rebuild): `docs/rpiSetup.md` and `docs/ubuntuServerSetup.md` still describe the legacy MariaDB / iptables architecture. They should be either rewritten to match the new `install.sh` flow or deleted in favor of the new `README.md`.
 
-This section gets updated as phases complete.
+The rebuild is done. Future work is regular maintenance, not phase-numbered delivery.
 
 ## Git Workflow
 

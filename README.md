@@ -1,6 +1,6 @@
-# Weather Station
+# Jones Big Ass Weather Dashboard
 
-> A DIY networked weather station built on ESP32 sensors, a Raspberry Pi (or any Linux box), and a custom web dashboard with built-in forecasting.
+A DIY networked weather station: ESP32 sensors → a Linux box on the LAN → a browser dashboard and a Linux system-tray widget.
 
 <!-- Add a screenshot of the dashboard here, e.g.:
 ![Dashboard](docs/images/dashboard.png)
@@ -8,135 +8,147 @@
 
 ## What is this?
 
-One or more weather sensors built around an ESP32 running FreeRTOS and a few cheap off-the-shelf sensors. Readings are collected by a light computing device (Raspberry Pi Zero 2 W or Linux PC), stored in a MySQL database, and displayed on the local network through a dashboard with live readings, historical charts, and a custom forecasting algorithm.
+One or more ESP32 boards (each with a BME280 plus, for outdoor, a TSL2591 light sensor and a NEO-6M GPS) sit on your home network reporting weather data over plain HTTP. A small FastAPI server on a Linux box polls them, writes outdoor readings to SQLite, and serves both an instrument-panel-style web dashboard and a JSON API. A separate Linux tray widget reads the same API for an always-visible temperature readout.
 
-If you want to know what the weather is doing at your house **right now**, what it's been doing for the past week, and roughly what it'll do later today — all on your own hardware, with no cloud service in the loop — this is for you.
+Three sensor roles are supported out of the box: **outdoor** (full sensor suite, GPS-tagged, history logged), **indoor** (BME280 only, live-only), and **basement** (BME280 only, live-only). The outdoor sensor's history is preserved in SQLite; indoor and basement are intentionally not logged.
 
-## Features
-
-- **Live local-network dashboard** with separate indoor and outdoor readings
-- **Historical charts** for temperature, humidity, pressure, dewpoint, and light over windows from 1 hour to 1 week
-- **Custom forecast engine** that predicts the next 12 hours using time-of-day weighted historical readings, with tunable analysis span and recency weight
-- **Sun and moon data**: sunrise, sunset, solar noon, dawn, dusk, moon phase, illumination, moonrise, moonset
-- **GPS-aware** outdoor sensors with live coordinates, altitude, and satellite count
-- **Linux system tray widget** that shows current temperature in the taskbar and a rich popup with dew point, absolute humidity, sun/moon sky positions, day length, GPS in DMS, and Maidenhead grid square
-- **On-device OLED display** that cycles through weather, light, GPS, and system status pages
-- **Multi-sensor capable** — supports indoor, outdoor, and additional indoor (e.g. basement) sensors out of the box
-- **Resilient** — FreeRTOS task scheduling, WiFi auto-reconnect, retry logic with exponential backoff on the logger side
+Nothing leaves your LAN. No cloud, no auth (it's a LAN device), no forecasting models.
 
 ## Architecture
 
 ```
-                           ┌─────────────────┐
-                           │  ESP32 Outdoor  │  ← BME280, TSL2591, NEO-6M, OLED
-                           │   (FreeRTOS)    │
-                           │  192.168.1.60   │
-                           └────────┬────────┘
-                                    │ HTTP /data (JSON)
-                                    ▼
-┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
-│  ESP32 Indoor   │────────▶│ weatherLogger_  │────────▶│     MySQL       │
-│   (FreeRTOS)    │  HTTP   │   *.py          │  INSERT │ weather_station │
-└─────────────────┘         └─────────────────┘         └────────┬────────┘
-                                                                 │
-                                                                 │ SELECT
-                                                                 ▼
-                            ┌─────────────────┐         ┌─────────────────┐
-                            │   Web Browser   │◀────────│ weatherProxy.py │
-                            │   (dashboard)   │  HTTP   │                 │
-                            └─────────────────┘         └─────────────────┘
-
-      ┌─────────────────┐
-      │   Linux Tray    │ ── reads directly from the ESP32
-      │ weather_tray.py │    (bypasses the database)
-      └─────────────────┘
+┌────────────────────┐
+│  ESP32 outdoor     │  BME280 + TSL2591 + NEO-6M + OLED  (192.168.1.60)
+│    FreeRTOS        │  HTTP GET /data → JSON
+└─────────┬──────────┘
+          │
+          │ (logger task polls every 60s, writes to SQLite)
+          │
+          ▼
+┌────────────────────┐       ┌────────────────────┐       ┌────────────────────┐
+│  Indoor / Basement │──────▶│   FastAPI server   │──────▶│   SQLite           │
+│   (BME280 only)    │  HTTP │   weather_server   │ INSERT│   outdoor only,    │
+│   (on-demand poll) │       │   port 8005        │       │   WAL mode         │
+└────────────────────┘       └─────────┬──────────┘       └────────────────────┘
+                                       │
+                                       │ HTTP /api/v1/* (JSON) + /dashboard/* (static)
+                                       │
+                ┌──────────────────────┼──────────────────────┐
+                ▼                      ▼                      ▼
+       ┌────────────────┐    ┌────────────────┐    ┌────────────────┐
+       │ Web dashboard  │    │ Linux tray     │    │ Anything else  │
+       │ (vanilla JS +  │    │ widget         │    │ that speaks    │
+       │  Chart.js)     │    │ (GTK +         │    │ HTTP JSON      │
+       │                │    │  AppIndicator) │    │                │
+       └────────────────┘    └────────────────┘    └────────────────┘
 ```
+
+Single FastAPI process. Outdoor sensor on a polling loop (1-minute default); indoor/basement on demand with a 5-second TTL cache so multiple dashboard tabs don't hammer them.
 
 ## What's in this repo
 
-| File / Folder | Purpose |
+| Path | What it is |
 |---|---|
-| `sketches/` | ESP32 Arduino sketches (one per sensor type) |
-| `weatherLogger_Outdoor.py` | Polls the outdoor ESP32 and writes readings to MySQL |
-| `weatherLogger_Indoor.py` | Polls the indoor ESP32 and writes readings to MySQL |
-| `weatherProxy.py` | HTTP server that serves the dashboard and exposes MySQL data as CSV |
-| `dashboard.html` | The main web dashboard (Chart.js + React) |
-| `weatherAnalysis.js` | React component for the "Forecast & Analysis" tab |
-| `weather_tray.py` | Linux system tray widget with rich weather popup |
-| `installScriptUbuntu.sh` | Bootstrap script for Ubuntu installs |
-| `js/` | Bundled JS libraries (Chart.js, React, SunCalc, etc.) |
-| `docs/` | Setup guides for Raspberry Pi and Ubuntu Server |
+| [`server/`](server/) | FastAPI server, SQLite logger, derivation modules, pytest suite. The `weather-server` package lives under `server/weather_server/`. |
+| [`dashboard/`](dashboard/) | Vanilla JS + Chart.js dashboard, served as static files by the API at `/dashboard/`. No React, no Babel, no Tailwind. |
+| [`widget/`](widget/) | Linux GTK3 system-tray widget. Reads `/api/v1/current` every 30 seconds; popup shows the same fields as the legacy widget. |
+| [`sketches/`](sketches/) | ESP32 firmware (FreeRTOS). One sketch per physical sensor: `outdoor.ino`, `indoor.ino`, `basement.ino`. |
+| [`docs/design/`](docs/design/) | The design documents that drove the rebuild. Start with [`docs/design/README.md`](docs/design/README.md); the decisions log in [`docs/design/01-findings.md`](docs/design/01-findings.md) is the canonical "why" reference. |
+| [`docs/phase2-verification.md`](docs/phase2-verification.md), [`docs/phase5-verification.md`](docs/phase5-verification.md) | On-hardware checklists used when bringing up real sensors and reflashing firmware. |
+| [`Makefile`](Makefile) | Common developer commands: `make dev`, `make test`, `make widget`, `make install`. Run `make help`. |
+| [`install.sh`](install.sh) | One-shot installer for a fresh Ubuntu/Debian host (apt deps + venv + systemd unit + UFW rule). |
 
-## Quick start
+## Quick start — server + dashboard on a fresh host
 
-**You'll need:**
+Bring up a fresh Ubuntu Server (or any Debian-derived) box, then:
 
-- One or more ESP32 boards + sensors (see [parts list](#parts-list))
-- A Raspberry Pi Zero 2 W or any Linux machine (Ubuntu Server recommended) to act as the collector / web server
-- A WiFi network the sensors can join
-- Basic comfort with breadboards, the Arduino IDE, and a Linux command line
+```bash
+git clone https://github.com/kbennett2000/weather-station-public.git
+cd weather-station-public
+sudo ./install.sh                 # add --with-widget if you want the tray
+```
 
-**Rough flow:**
+The installer:
 
-1. Wire up the sensors to your ESP32(s) per the [pin connections](#pin-connections) below.
-2. Open the appropriate sketch in the Arduino IDE, set your WiFi credentials, and flash it. Note the assigned IP address.
-3. Set up your collector machine using one of the setup guides:
-   - [Raspberry Pi setup](docs/rpiSetup.md)
-   - [Ubuntu Server setup](docs/ubuntuServerSetup.md)
-4. Point your browser at the collector machine and the dashboard will load.
-5. Optional: install `weather_tray.py` on any Linux desktop for an always-visible widget.
+- Installs `python3`, `python3-venv`, `sqlite3`, `ufw`, `curl` via apt.
+- Creates a venv at `server/.venv` owned by your user (derived from `$SUDO_USER`).
+- `pip install -e ./server` so the FastAPI app is on the path.
+- Drops a systemd unit at `/etc/systemd/system/weather-server.service` that runs `uvicorn` on port 8005, restarts on failure, and logs to journald.
+- Opens TCP 8005 in UFW. **Nothing else.** No iptables, no port 80 redirect, no static IP rewrite.
+
+After it finishes:
+
+```bash
+$EDITOR server/weather.toml                       # set your sensor IPs
+sudo systemctl restart weather-server.service
+journalctl -u weather-server.service -f           # tail logs
+```
+
+Then open `http://<this-host>:8005` in any browser on the LAN.
+
+## Quick start — tray widget on your Linux desktop
+
+The widget is a separate, optional process. It runs on any Linux desktop that can reach the server's URL — same box or any other LAN box.
+
+```bash
+sudo ./install.sh --with-widget
+$EDITOR widget/config.toml                        # set server_url
+make widget                                       # or: python3 widget/weather_tray.py
+```
+
+Add `python3 /path/to/widget/weather_tray.py` to your desktop's autostart if you want it on every login. The widget uses the **system** Python (not the server's venv) because PyGObject (`gi`) ships as an apt package, not pip.
 
 ## Configuration
 
-Before flashing the sketches, change the `NetworkName` and `NetworkPassword` placeholders in [the outdoor sketch](sketches/outdoor.ino), [the indoor sketch](sketches/indoor.ino), and [the basement sketch](sketches/basement.ino) to match your WiFi network.
+### Server — `server/weather.toml`
 
-The default outdoor sensor IP is `192.168.1.60`. If you use a different address, update it in the sketch and in the logger scripts.
+Copy [`server/weather.toml.example`](server/weather.toml.example) (the installer does this for you) and edit. Important keys:
 
-## Parts list
+- `[server] port` — defaults to `8005`. Match this in the systemd unit and widget config if you change it.
+- `[[sensors]]` blocks — one per physical device. Each carries `id`, `role`, `ip`, calibration offsets, and online thresholds.
+- `[development] fixture_dir` — if set, the logger reads from fixture JSON files instead of polling real sensors. Useful for offline development; **comment out for production**.
 
-- Raspberry Pi Zero 2 W or PC running Linux (recommend Ubuntu Server)
-- ESP-32 control boards (one per sensor location)
-- BME280 temp / humidity / pressure sensors
-- TSL2591 light sensor (outdoor only)
-- NEO-6M GPS sensor (outdoor only)
-- 0.96" OLED display (optional)
-- Project boxes or containers for sensors as desired
+### Widget — `widget/config.toml`
 
-## Pin connections
+Two keys: `server_url` (e.g. `http://192.168.1.62:8005`) and `refresh_seconds` (default `30`).
 
-Most sensor boards share the I²C bus on GPIO21 (SDA) and GPIO22 (SCL). The GPS uses Serial2.
+### Sketches
 
-### BME280
+WiFi credentials and the device's static IP are hardcoded constants near the top of each `.ino`. Edit before flashing. There's no over-the-air config; this is by design — the sketches stay simple and never expose a config endpoint to the LAN.
 
-- VIN → ESP32 3.3V
-- GND → ESP32 GND
-- SCL → ESP32 GPIO22
-- SDA → ESP32 GPIO21
-- CSB → unconnected
-- SDO → ESP32 GND
+## Developer workflow
 
-### TSL2591 (outdoor only)
+```bash
+make install         # one-time: create venv, pip install -e ./server[dev]
+make dev             # uvicorn --reload on port 8005
+make test            # pytest (currently 112 tests, runs in ~6s)
+make check           # lint + typecheck + test
+make widget          # run the tray with system python
+```
 
-- VIN → ESP32 3.3V
-- GND → ESP32 GND
-- SCL → ESP32 GPIO22 (shared with BME280)
-- SDA → ESP32 GPIO21 (shared with BME280)
-- INT → unconnected
+OpenAPI docs render at `http://localhost:8005/docs` when the server is up.
 
-### NEO-6M GPS (outdoor only)
+## Hardware
 
-- VCC → ESP32 3.3V
-- GND → ESP32 GND
-- TX → ESP32 GPIO16 (RX2)
-- RX → ESP32 GPIO17 (TX2)
+- Raspberry Pi Zero 2 W, or any Linux machine (Ubuntu Server LTS recommended for the production box)
+- ESP32 dev boards — one per physical sensor location
+- BME280 (temperature / humidity / pressure) on every sensor
+- TSL2591 (light) on the outdoor sensor only
+- NEO-6M GPS on the outdoor sensor only
+- 0.96" SSD1306 OLED (optional, every sensor)
 
-### OLED display
+### Pin connections (per ESP32)
 
-- VCC → ESP32 3.3V
-- GND → ESP32 GND
-- SCL → ESP32 GPIO22 (shared with others)
-- SDA → ESP32 GPIO21 (shared with others)
+I²C devices (BME280, TSL2591, OLED) share the bus on GPIO21 (SDA) / GPIO22 (SCL). The GPS is on Serial2.
+
+**BME280:** VIN → 3V3, GND → GND, SCL → GPIO22, SDA → GPIO21, CSB unconnected, SDO → GND.
+
+**TSL2591 (outdoor only):** VIN → 3V3, GND → GND, SCL/SDA shared with BME280, INT unconnected.
+
+**NEO-6M GPS (outdoor only):** VCC → 3V3, GND → GND, TX → GPIO16 (RX2), RX → GPIO17 (TX2).
+
+**OLED (optional):** VCC → 3V3, GND → GND, SCL/SDA shared with BME280.
 
 ## License
 
-Released under the [MIT License](LICENSE). Use it, fork it, hack it, build a business on it — whatever you want. The only formal requirement is keeping the copyright notice in copies.
+[MIT](LICENSE). Use it, fork it, hack it — keep the copyright notice in copies.
