@@ -65,8 +65,8 @@ weather-station-public/
 │   │   ├── 04-server-architecture.md
 │   │   ├── 05-clients-scope.md
 │   │   └── 06-dashboard-mockup.html
-│   ├── rpiSetup.md              # Existing user docs (to be reviewed in phase 6)
-│   └── ubuntuServerSetup.md
+│   ├── phase2-verification.md   # On-hardware verification checklists
+│   └── phase5-verification.md
 ├── server/
 │   ├── weather_server/          # FastAPI app
 │   │   ├── __init__.py
@@ -175,8 +175,7 @@ Rewrite `installScriptUbuntu.sh` as `install.sh`. Install the new stack (FastAPI
   - Phase 4.5 — server emits sun/moon timestamps in the resolved local zone
   - Phase 5 — ESP32 sketch cleanup (drop inline HTML, drop /setOffset, BUG-08 fixed at source, sketches renamed to `outdoor.ino` / `indoor.ino` / `basement.ino`)
   - Phase 6 — `install.sh`, systemd unit, README rewrite, legacy files removed
-- Legacy code removed: `weatherProxy.py`, `weatherLogger_*.py`, `dashboard.html`, `weatherAnalysis.js`, `weather_tray.py` (root), `installScriptUbuntu.sh`, `js/`, and the two non-FreeRTOS sketches.
-- Outstanding (pre-existing, not in scope for the rebuild): `docs/rpiSetup.md` and `docs/ubuntuServerSetup.md` still describe the legacy MariaDB / iptables architecture. They should be either rewritten to match the new `install.sh` flow or deleted in favor of the new `README.md`.
+- Legacy code removed: `weatherProxy.py`, `weatherLogger_*.py`, `dashboard.html`, `weatherAnalysis.js`, `weather_tray.py` (root), `installScriptUbuntu.sh`, `js/`, the two non-FreeRTOS sketches, and the three outdated setup guides (`docs/rpiSetup.md`, `docs/ubuntuServerSetup.md`, `docs/howToUseWeatherTray_Ubuntu.md` — all superseded by `install.sh` + `README.md`).
 
 The rebuild is done. Future work is regular maintenance, not phase-numbered delivery.
 

@@ -96,7 +96,7 @@ $EDITOR widget/config.toml                        # set server_url
 make widget                                       # or: python3 widget/weather_tray.py
 ```
 
-Add `python3 /path/to/widget/weather_tray.py` to your desktop's autostart if you want it on every login. The widget uses the **system** Python (not the server's venv) because PyGObject (`gi`) ships as an apt package, not pip.
+For autostart on every login: on Ubuntu Desktop (GNOME), open the **Startup Applications** tool, click *Add*, and set the command to `/usr/bin/python3 /path/to/widget/weather_tray.py`. The widget uses the **system** Python (not the server's venv) because PyGObject (`gi`) ships as an apt package, not pip.
 
 ## Configuration
 
