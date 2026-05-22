@@ -310,14 +310,22 @@ Only `outdoor` is currently logged (see `weather-station-schema.md`). Calls with
       "humidity_pct": 42.1,
       "pressure_sealevel_hpa": 1023.0,
       "pressure_station_hpa": 804.4,
-      "dewpoint_c": 5.1,
-      "lux": 12450
+      "dewpoint_c": 5.1
     }
   ]
 }
 ```
 
-History rows are stripped down: no astronomy, no device telemetry by default (use `include=device`), no Maidenhead grid (use `include=location`). Each row carries pre-computed derived values for the bucketed reading, so the client never needs to compute °F or dew point itself.
+History rows are stripped down: no astronomy, no light data by default (use `include=light`), no device telemetry by default (use `include=device`), no Maidenhead grid (use `include=location`). Each row carries pre-computed derived values for the bucketed reading, so the client never needs to compute °F or dew point itself.
+
+The field groups are:
+
+| Group | Fields |
+|---|---|
+| `weather` | `temperature_c`, `temperature_f`, `humidity_pct`, `pressure_station_hpa`, `pressure_sealevel_hpa`, `dewpoint_c` |
+| `light` | `lux`, `ir`, `visible`, `full` |
+| `location` | `lat`, `lon`, `altitude_m`, `satellites`, `maidenhead` |
+| `device` | `rssi_dbm`, `uptime_s`, `free_heap_bytes` |
 
 Aggregation within a bucket is mean for continuous quantities (temperature, humidity, pressure, lux) and most-recent for discrete/state values (satellites, RSSI, etc.).
 
@@ -502,6 +510,13 @@ A representative config file:
 host = "0.0.0.0"
 port = 8005
 db_path = "weather.db"
+
+[logger]
+interval_seconds = 60
+http_timeout_seconds = 10
+
+[cache]
+ttl_seconds = 5
 
 [[sensors]]
 id = "outdoor"
