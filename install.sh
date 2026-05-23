@@ -347,3 +347,39 @@ if $SEEDED_SERVER_CONFIG; then
     echo "Reminder: server/weather.toml was just created from the example."
     echo "You almost certainly want to edit it before considering this done."
 fi
+
+# Loud banner if the resolved weather.toml has fixture mode active —
+# the #1 thing new installs miss. Skip if [development] is gone or
+# fixture_dir is null.
+FIXTURE_ACTIVE="$(python3 - "$REPO_DIR/server/weather.toml" <<'PY'
+import sys, tomllib
+try:
+    with open(sys.argv[1], "rb") as f:
+        cfg = tomllib.load(f)
+    print("yes" if cfg.get("development", {}).get("fixture_dir") else "no")
+except Exception:
+    print("no")
+PY
+)"
+
+if [[ "$FIXTURE_ACTIVE" == "yes" ]]; then
+cat <<'EOF'
+
+══════════════════════════════════════════════════════════════════════
+⚠  FIXTURE MODE IS ACTIVE — the dashboard will show DUMMY DATA, not
+   live sensor readings. This is the #1 thing new installs miss.
+
+   To switch to real polling:
+     1. Edit server/weather.toml
+     2. Comment out the entire [development] block (two lines)
+     3. Confirm each [[sensors]] block's `ip = "..."` matches your
+        actual sensor on the LAN
+     4. sudo systemctl restart weather-server.service
+        (or Ctrl-C + restart if you're using `make dev`)
+
+   You'll know it worked when /api/v1/current returns your real
+   outdoor temperature instead of 64.2°F.
+══════════════════════════════════════════════════════════════════════
+
+EOF
+fi

@@ -37,13 +37,16 @@ git clone https://github.com/kbennett2000/weather-station-public.git
 cd weather-station-public
 sudo ./install.sh                    # default port 8005
 # or: sudo ./install.sh --port 9000  # any TCP port you like
-$EDITOR server/weather.toml          # set your sensor IPs, drop fixture mode
+$EDITOR server/weather.toml          # set your sensor IPs + see callout below
 $EDITOR branding.toml                # optional: fill in the [BRANDING] slots with your own good ass flavor
 sudo systemctl restart weather-server.service
 ```
 
-Then open `http://<this-host>:8005/` (or whatever port you picked).  
-If anything’s unclear, just go read [`02-install-and-configure.md`](docs/02-install-and-configure.md) — it walks you through the whole thing like Toby would (with enthusiasm and probably a beer).
+Then open `http://<this-host>:8005/` (or whatever port you picked).
+
+> **⚠ Heads up — out of the box the server runs in fixture mode and shows dummy data.** That's by design so the dashboard works on a fresh install with no sensors connected. To get real readings: edit `server/weather.toml`, set your sensor IPs in the `[[sensors]]` blocks, **comment out the entire `[development]` block**, and restart the service. The dummy-vs-live distinction is the #1 thing people miss on a fresh install.
+
+If anything else is unclear, [`02-install-and-configure.md`](docs/02-install-and-configure.md) is the full walkthrough.
 
 ## Developer Workflow (For When You Get Extra Motivated)
 

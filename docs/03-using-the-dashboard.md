@@ -2,6 +2,8 @@
 
 This is the end-user tour. If you've got the sensors built ([`01`](01-building-the-sensors.md)) and the server running ([`02`](02-install-and-configure.md)), the dashboard at `http://<host>:8005/` is showing live data. This doc explains what every number on it actually means.
 
+> **The numbers look fake to me — Denver weather, exactly 64.2°F outdoor, exactly 9 satellites?** That's fixture data. Fresh installs ship with `[development] fixture_dir = "fixtures"` enabled in `server/weather.toml` so the dashboard works without real sensors. To get live readings: comment out the entire `[development]` block in `server/weather.toml`, set the real sensor IPs in the `[[sensors]]` blocks, and restart the service (`sudo systemctl restart weather-server.service`). See [`02-install-and-configure.md`](02-install-and-configure.md#development) for the full configuration walkthrough.
+
 ---
 
 ## The whole picture
