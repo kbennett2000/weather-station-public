@@ -131,6 +131,55 @@ def test_missing_inputs_skip_outputs() -> None:
     assert derived == {}
 
 
+def test_heat_index_below_gate_returns_air_temp() -> None:
+    # Cool air: heat index undefined, function returns the input temperature.
+    assert readings.heat_index_f(75.0, 90.0) == pytest.approx(75.0)
+    # Warm but dry enough that the NWS simple-formula gate rejects: also returns air temp.
+    assert readings.heat_index_f(80.0, 40.0) == pytest.approx(80.0)
+
+
+def test_heat_index_warm_humid_matches_nws_table() -> None:
+    # NWS heat-index table: 90°F + 70% RH → ~105°F.
+    assert readings.heat_index_f(90.0, 70.0) == pytest.approx(105.3, abs=1.0)
+
+
+def test_heat_index_high_humidity_adjustment_applies() -> None:
+    # 85°F + 90% RH falls in the R>85, 80≤T≤87 adjustment band. NWS table ≈101-102°F.
+    assert readings.heat_index_f(85.0, 90.0) == pytest.approx(101.8, abs=1.5)
+
+
+def test_heat_index_invalid_humidity_returns_air_temp() -> None:
+    assert readings.heat_index_f(95.0, 0.0) == pytest.approx(95.0)
+    assert readings.heat_index_f(95.0, 101.0) == pytest.approx(95.0)
+
+
+def test_derive_reading_includes_feels_like_pair() -> None:
+    # Hot + humid: feels-like exceeds air temp.
+    derived = readings.derive_reading(
+        {"temperature_c": 32.222, "humidity_pct": 70.0},  # 32.222°C ≈ 90°F
+    )
+    assert derived["feels_like_f"] == pytest.approx(105.3, abs=1.0)
+    # °C field is the °F value converted back, not the input temperature.
+    assert derived["feels_like_c"] == pytest.approx(
+        (derived["feels_like_f"] - 32.0) * 5.0 / 9.0
+    )
+
+
+def test_derive_reading_feels_like_equals_air_temp_in_mild_conditions() -> None:
+    # 20°C / 50% RH is well below the heat-index regime — feels-like collapses to air temp.
+    derived = readings.derive_reading(
+        {"temperature_c": 20.0, "humidity_pct": 50.0},
+    )
+    assert derived["feels_like_c"] == pytest.approx(20.0, abs=0.01)
+    assert derived["feels_like_f"] == pytest.approx(derived["temperature_f"])
+
+
+def test_derive_reading_omits_feels_like_when_humidity_missing() -> None:
+    derived = readings.derive_reading({"temperature_c": 25.0})
+    assert "feels_like_f" not in derived
+    assert "feels_like_c" not in derived
+
+
 def test_map_raw_maps_full_spectrum_to_full() -> None:
     raw = readings.map_raw(
         {

@@ -64,6 +64,46 @@ def absolute_humidity_g_m3(temp_c: float, humidity_pct: float) -> float | None:
     ) / (KELVIN_OFFSET + temp_c)
 
 
+def heat_index_f(temp_f: float, humidity_pct: float) -> float:
+    """NWS apparent-temperature ("feels like") on the warm side.
+
+    Uses the simple-formula gate from NWS guidance: only escalate to the
+    full Rothfusz regression once the simple value averaged with the air
+    temperature reaches 80°F. Below that gate, or for non-physical
+    humidity, returns the air temperature unchanged. Wind chill (cold
+    side) is not computed — no anemometer on the outdoor sensor.
+    """
+    if humidity_pct <= 0 or humidity_pct > 100:
+        return temp_f
+    hi_simple = 0.5 * (
+        temp_f + 61.0 + (temp_f - 68.0) * 1.2 + humidity_pct * 0.094
+    )
+    if (hi_simple + temp_f) / 2.0 < 80.0:
+        return temp_f
+    t = temp_f
+    r = humidity_pct
+    hi = (
+        -42.379
+        + 2.04901523 * t
+        + 10.14333127 * r
+        - 0.22475541 * t * r
+        - 0.00683783 * t * t
+        - 0.05481717 * r * r
+        + 0.00122874 * t * t * r
+        + 0.00085282 * t * r * r
+        - 0.00000199 * t * t * r * r
+    )
+    if r < 13.0 and 80.0 <= t <= 112.0:
+        hi -= ((13.0 - r) / 4.0) * math.sqrt((17.0 - abs(t - 95.0)) / 17.0)
+    elif r > 85.0 and 80.0 <= t <= 87.0:
+        hi += ((r - 85.0) / 10.0) * ((87.0 - t) / 5.0)
+    return hi
+
+
+def f_to_c(fahrenheit: float) -> float:
+    return (fahrenheit - 32.0) * 5.0 / 9.0
+
+
 def pressure_pa_to_hpa(pa: float) -> float:
     return pa * HPA_PER_PA
 
@@ -112,6 +152,9 @@ def derive_reading(
         out["dewpoint_c"] = dp_c
         out["dewpoint_f"] = c_to_f(dp_c) if dp_c is not None else None
         out["absolute_humidity_g_m3"] = absolute_humidity_g_m3(cal_temp_c, raw_humidity)
+        feels_f = heat_index_f(c_to_f(cal_temp_c), raw_humidity)
+        out["feels_like_f"] = feels_f
+        out["feels_like_c"] = f_to_c(feels_f)
 
     if raw_pressure_pa is not None:
         station_hpa = pressure_pa_to_hpa(raw_pressure_pa)

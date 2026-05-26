@@ -44,6 +44,8 @@ class CalibrationBlock(_StrictModel):
 class DerivedReading(_StrictModel):
     temperature_c: float | None = None
     temperature_f: float | None = None
+    feels_like_c: float | None = None
+    feels_like_f: float | None = None
     dewpoint_c: float | None = None
     dewpoint_f: float | None = None
     absolute_humidity_g_m3: float | None = None

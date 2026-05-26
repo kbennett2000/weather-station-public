@@ -34,7 +34,7 @@ From left to right:
 
 The hero panel. Air temperature in big amber readout because that's the question 90% of people open the dashboard to answer.
 
-- **Temperature** — big number is °F; subtitle gives °C and the `feels-like` value. The current implementation reports `feels-like = air temp` (no wind chill / heat index correction yet — there's no anemometer on the sensor).
+- **Temperature** — big number is °F; subtitle gives °C and the `feels-like` value. Feels-like uses the NWS heat-index formula (Rothfusz regression) on the warm side — above ~80°F with non-trivial humidity, expect it to read higher than the air temperature. Below the heat-index threshold it collapses to air temp. Wind chill on the cold side is **not** computed (no anemometer on the outdoor sensor), so on cold windy days feels-like will under-report the chill.
 - **Humidity** — relative humidity %. The smaller `g/m³ absolute` is absolute humidity (grams of water vapour per cubic metre of air), useful when you care about whether your house is gaining or losing moisture in absolute terms rather than relative to current temperature.
 - **Dew Point** — temperature at which the current air would have to cool for moisture to condense. Lower than air temperature means the air is unsaturated; closer they get, the more humid it feels. Practical cutoffs:
   - dew point < 55°F: dry, comfortable
@@ -87,7 +87,7 @@ The moon row at the bottom of the panel is a single line — phase emoji + name 
 
 ![Indoor + Basement panels](images/07-indoor-basement.png)
 
-Each panel is the same shape: big °F number on the left, smaller °C below, then three stacked metrics (humidity, dew point, pressure). Pressure here is *station* pressure — these sensors live indoors, so the sea-level adjustment isn't meaningful. (Useful for spotting weather fronts coming through even from inside the house.)
+Each panel is the same shape: big °F number on the left, smaller °C below, then three stacked metrics (humidity, dew point, pressure). The humidity tile shows relative humidity % with an absolute humidity (g/m³) subtitle, same as the outdoor panel — useful for comparing moisture content between rooms when their temperatures differ. Pressure here is *station* pressure — these sensors live indoors, so the sea-level adjustment isn't meaningful. (Useful for spotting weather fronts coming through even from inside the house.)
 
 If a sensor goes offline, the panel changes:
 

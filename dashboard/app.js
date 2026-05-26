@@ -403,7 +403,7 @@ function applyOutdoor(sr) {
 
   setText('out-temp-f', fmt(d.temperature_f, 1));
   setText('out-temp-c', fmt(d.temperature_c, 1));
-  setText('out-feels-f', fmt(d.temperature_f, 1));
+  setText('out-feels-f', fmt(d.feels_like_f, 1));
   setText('out-hum', fmt(raw.humidity_pct, 1));
   setText('out-abshum', fmt(d.absolute_humidity_g_m3, 1));
   setText('out-dew-f', fmt(d.dewpoint_f, 1));
@@ -467,6 +467,7 @@ function applyIndoor(sr) {
   setText('in-temp-f', fmt(d.temperature_f, 1));
   setText('in-temp-c', fmt(d.temperature_c, 1));
   setText('in-hum', fmt(raw.humidity_pct, 1));
+  setText('in-abshum', fmt(d.absolute_humidity_g_m3, 1));
   setText('in-dew-f', fmt(d.dewpoint_f, 1));
   setText('in-press-inhg', fmt(d.pressure_station_inhg, 2));
 }
@@ -499,6 +500,7 @@ function applyBasement(sr) {
   setText('bsmt-temp-f', offline ? '--' : fmt(d.temperature_f, 1));
   setText('bsmt-temp-c', fmt(d.temperature_c, 1));
   setText('bsmt-hum', fmt(raw.humidity_pct, 1));
+  setText('bsmt-abshum', fmt(d.absolute_humidity_g_m3, 1));
   setText('bsmt-press-inhg', fmt(d.pressure_station_inhg, 2));
 }
 
