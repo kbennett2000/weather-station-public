@@ -153,6 +153,18 @@ body::after {
   font-style: italic;
 }
 
+.meta-link {
+  color: var(--cool);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--cool-dim);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.meta-link:hover {
+  color: var(--readout);
+  border-bottom-color: var(--readout);
+}
+
 .header-status {
   display: flex;
   flex-direction: column;
