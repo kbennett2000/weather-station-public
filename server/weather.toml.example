@@ -47,8 +47,8 @@ fetch = ["wind", "cloud", "uv", "precip", "visibility"]
 cross_check = false
 # station_id = "KCOELIZA85"   # nws (pin a station) or wunderground (required)
 # api_key = "..."             # wunderground only (free; never the website key)
-# lat_override = 39.43326     # default: outdoor GPS, then its fallback_lat/lon
-# lon_override = -104.51888
+# lat_override = 00.00000     # default: outdoor GPS, then its fallback_lat/lon
+# lon_override = 00.00000
 
 [[sensors]]
 id = "outdoor"
@@ -59,8 +59,8 @@ has_light = true
 online_threshold_seconds = 120
 temp_offset_c = -0.5
 fallback_altitude_m = 1609.3   # used for sea-level adjustment if GPS has no fix
-fallback_lat = 39.7392         # used by astronomy if GPS has no fix
-fallback_lon = -104.9903       # used by astronomy if GPS has no fix
+fallback_lat = 00.0000         # used by astronomy if GPS has no fix
+fallback_lon = 00.0000       # used by astronomy if GPS has no fix
 
 [[sensors]]
 id = "indoor"
