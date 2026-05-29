@@ -59,6 +59,26 @@ class DerivedReading(_StrictModel):
     pressure_sealevel_hpa: float | None = None
     pressure_sealevel_inhg: float | None = None
 
+    # Extended thermodynamics (D-READING) — local, always available.
+    wet_bulb_c: float | None = None
+    wet_bulb_f: float | None = None
+    humidex_c: float | None = None
+    humidex_f: float | None = None
+    frost_point_c: float | None = None
+    frost_point_f: float | None = None
+    saturation_vapor_pressure_hpa: float | None = None
+    vapor_pressure_hpa: float | None = None
+    vapor_pressure_deficit_kpa: float | None = None
+    mixing_ratio_g_kg: float | None = None
+    specific_humidity_g_kg: float | None = None
+    air_density_kg_m3: float | None = None
+    pressure_altitude_m: float | None = None
+    pressure_altitude_ft: float | None = None
+    density_altitude_m: float | None = None
+    density_altitude_ft: float | None = None
+    cloud_base_m: float | None = None
+    cloud_base_ft: float | None = None
+
 
 class LocationBlock(_StrictModel):
     lat: float | None = None
