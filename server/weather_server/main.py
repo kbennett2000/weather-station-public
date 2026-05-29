@@ -28,7 +28,16 @@ from .db import init_db
 from .external import ExternalStore
 from .external.task import external_fetch_loop
 from .logger_task import outdoor_logger_loop
-from .routes import astronomy, branding, current, external, health, history, sensors
+from .routes import (
+    astronomy,
+    branding,
+    current,
+    external,
+    health,
+    history,
+    sensors,
+    summary,
+)
 from .schemas import ErrorBody, ErrorResponse
 from .sensors import make_source
 
@@ -102,6 +111,7 @@ def create_app() -> FastAPI:
 
     app.include_router(current.router, tags=["current"])
     app.include_router(history.router, tags=["history"])
+    app.include_router(summary.router, tags=["summary"])
     app.include_router(sensors.router, tags=["sensors"])
     app.include_router(astronomy.router, tags=["astronomy"])
     app.include_router(external.router, tags=["external"])

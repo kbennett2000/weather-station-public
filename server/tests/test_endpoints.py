@@ -133,6 +133,45 @@ def test_history_bad_include_group_returns_400(client: TestClient) -> None:
     assert r.json()["error"]["code"] == "bad_request"
 
 
+def test_summary_outdoor_returns_stats(client: TestClient) -> None:
+    r = client.get("/api/v1/summary/outdoor?period=7d")
+    assert r.status_code == 200
+    parsed = schemas.SummaryResponse.model_validate(r.json())
+    assert parsed.sensor_id == "outdoor"
+    assert parsed.period == "7d"
+    assert parsed.sample_count > 0
+    assert parsed.temperature_c is not None and parsed.temperature_c.max is not None
+    assert parsed.pressure_trend in ("rising", "falling", "steady")
+    assert parsed.diurnal_range_c is not None
+    assert parsed.heating_degree_days_f is not None
+    assert parsed.light_integral_mol_m2 is not None
+
+
+def test_summary_today_period_label(client: TestClient) -> None:
+    r = client.get("/api/v1/summary/outdoor")  # default period=today
+    assert r.status_code == 200
+    parsed = schemas.SummaryResponse.model_validate(r.json())
+    assert parsed.period == "today"
+
+
+def test_summary_indoor_404_history_not_available(client: TestClient) -> None:
+    r = client.get("/api/v1/summary/indoor")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "history_not_available"
+
+
+def test_summary_unknown_404_sensor_not_found(client: TestClient) -> None:
+    r = client.get("/api/v1/summary/kitchen")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "sensor_not_found"
+
+
+def test_summary_bad_period_422(client: TestClient) -> None:
+    # period is a Literal; FastAPI rejects unknown values with 422.
+    r = client.get("/api/v1/summary/outdoor?period=decade")
+    assert r.status_code == 422
+
+
 def test_sensors_endpoint_lists_all_three(client: TestClient) -> None:
     r = client.get("/api/v1/sensors")
     assert r.status_code == 200
@@ -210,6 +249,8 @@ def test_openapi_docs_render(client: TestClient) -> None:
         "/api/v1/current",
         "/api/v1/current/{sensor_id}",
         "/api/v1/history/{sensor_id}",
+        "/api/v1/summary/{sensor_id}",
+        "/api/v1/external",
         "/api/v1/sensors",
         "/api/v1/astronomy",
         "/api/v1/health",

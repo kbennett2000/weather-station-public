@@ -267,6 +267,45 @@ class HistoryResponse(_StrictModel):
     )
 
 
+class Stat(_StrictModel):
+    min: float | None = None
+    max: float | None = None
+    avg: float | None = None
+
+
+class SummaryResponse(_StrictModel):
+    """Windowed history summary (D-HISTORY). Outdoor only."""
+
+    sensor_id: str
+    period: str
+    from_: datetime = Field(serialization_alias="from", validation_alias="from")
+    to: datetime
+    timezone: str
+    sample_count: int
+
+    temperature_c: Stat | None = None
+    temperature_f: Stat | None = None
+    humidity_pct: Stat | None = None
+    pressure_station_hpa: Stat | None = None
+    pressure_sealevel_hpa: Stat | None = None
+    dewpoint_avg_c: float | None = None
+    diurnal_range_c: float | None = None
+
+    pressure_tendency_hpa_3h: float | None = None
+    pressure_trend: str | None = None  # "rising" | "falling" | "steady"
+    temperature_trend_c_per_hour: float | None = None
+
+    # Accumulated over the window (°F-days, US base 65/65/50).
+    heating_degree_days_f: float | None = None
+    cooling_degree_days_f: float | None = None
+    growing_degree_days_f: float | None = None
+
+    light_integral_mol_m2: float | None = None  # DLI over a single day
+    hargreaves_et0_mm: float | None = None  # temperature-only reference ET₀
+
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+
 class SensorListEntry(_StrictModel):
     sensor_id: str
     role: str
