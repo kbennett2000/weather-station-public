@@ -46,6 +46,18 @@ class CalibrationBlock(_StrictModel):
     temp_offset_c: float | None = None
 
 
+class SkyBlock(_StrictModel):
+    """Light-sensor derivations (D-READING). `estimated` is always True — these
+    are modeled from illuminance + sun geometry, not measured by instruments."""
+
+    estimated: bool = True
+    sun_altitude_deg: float | None = None
+    solar_irradiance_w_m2: float | None = None
+    cloud_cover_pct: float | None = None
+    uv_index_estimate: float | None = None
+    sky_condition: str | None = None
+
+
 class DerivedReading(_StrictModel):
     temperature_c: float | None = None
     temperature_f: float | None = None
@@ -78,6 +90,10 @@ class DerivedReading(_StrictModel):
     density_altitude_ft: float | None = None
     cloud_base_m: float | None = None
     cloud_base_ft: float | None = None
+
+    # Light-sensor estimates (present only when the sensor has a light sensor
+    # and the sun is up enough to be meaningful).
+    sky: SkyBlock | None = None
 
 
 class LocationBlock(_StrictModel):

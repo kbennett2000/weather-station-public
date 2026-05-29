@@ -49,6 +49,25 @@ def test_current_endpoint_returns_documented_shape(client: TestClient) -> None:
     assert parsed.astronomy.reference_location.source == "outdoor_sensor"
 
 
+def test_current_outdoor_has_sky_block(client: TestClient) -> None:
+    parsed = schemas.CurrentResponse.model_validate(client.get("/api/v1/current").json())
+    sky = parsed.sensors["outdoor"].derived.sky
+    assert sky is not None
+    assert sky.estimated is True
+    assert sky.solar_irradiance_w_m2 is not None
+    assert sky.sun_altitude_deg is not None
+    # Indoor has no light sensor → no sky block.
+    assert parsed.sensors["indoor"].derived.sky is None
+
+
+def test_current_outdoor_extended_thermo_present(client: TestClient) -> None:
+    parsed = schemas.CurrentResponse.model_validate(client.get("/api/v1/current").json())
+    d = parsed.sensors["outdoor"].derived
+    assert d.wet_bulb_c is not None
+    assert d.vapor_pressure_deficit_kpa is not None
+    assert d.air_density_kg_m3 is not None
+
+
 def test_current_one_outdoor(client: TestClient) -> None:
     r = client.get("/api/v1/current/outdoor")
     assert r.status_code == 200

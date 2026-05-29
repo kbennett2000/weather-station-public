@@ -12,6 +12,7 @@ from typing import Any
 
 from .config import Config, SensorConfig
 from .derivations import astronomy as astro
+from .derivations import light as lt
 from .derivations import location as loc
 from .derivations import readings as rd
 from .external import Observation, cardinal_from_deg
@@ -26,6 +27,7 @@ from .schemas import (
     RawReading,
     ReferenceLocation,
     SensorReading,
+    SkyBlock,
     SunBlock,
 )
 
@@ -80,6 +82,7 @@ def _build_reading(
     raw_block = rd.map_raw(payload)
     location_block = _build_location_block(payload) if sensor.has_gps else None
     device_block = _build_device_block(payload)
+    sky_block = _build_sky_block(sensor, payload, reading_ts)
 
     return SensorReading(
         sensor_id=sensor.id,
@@ -89,9 +92,32 @@ def _build_reading(
         age_seconds=round(age, 1),
         raw=RawReading(**raw_block),
         calibration=CalibrationBlock(temp_offset_c=sensor.temp_offset_c),
-        derived=DerivedReading(**derived),
+        derived=DerivedReading(**derived, sky=sky_block),
         location=location_block,
         device=device_block,
+    )
+
+
+def _build_sky_block(
+    sensor: SensorConfig, payload: dict[str, Any], reading_ts: datetime
+) -> SkyBlock | None:
+    """Light-sensor estimates. Needs a light sensor, a lux reading, and GPS so
+    the sun's altitude at reading time can be computed. Otherwise None."""
+    if not sensor.has_light:
+        return None
+    lux = payload.get("lux")
+    lat = payload.get("latitude")
+    lon = payload.get("longitude")
+    if lux is None or lat is None or lon is None:
+        return None
+    sun_alt = astro.sun_position(reading_ts, lat, lon).altitude_deg
+    cloud = lt.cloud_cover_pct(lux, sun_alt)
+    return SkyBlock(
+        sun_altitude_deg=sun_alt,
+        solar_irradiance_w_m2=lt.lux_to_irradiance_w_m2(lux),
+        cloud_cover_pct=cloud,
+        uv_index_estimate=lt.uv_index_estimate(sun_alt, cloud),
+        sky_condition=lt.sky_condition(sun_alt, cloud),
     )
 
 
