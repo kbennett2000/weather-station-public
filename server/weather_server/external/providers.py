@@ -88,6 +88,12 @@ def _default_http_get(url: str, headers: dict[str, str] | None, timeout: float) 
     return resp.json()
 
 
+def _scrub(message: str, secret: str | None) -> str:
+    """Keep an api_key out of log output. requests/urllib3 errors embed the
+    full request URL (including ?apiKey=...) in their message."""
+    return message.replace(secret, "***") if secret else message
+
+
 # ── number / time coercion helpers ────────────────────────────────────────────
 
 
@@ -299,8 +305,13 @@ def fetch_external(
         else:  # pragma: no cover - guarded by config validation
             log.warning("unknown external provider %r", cfg.provider)
             return None
-    except Exception:
-        log.info("external fetch failed for provider %s", cfg.provider, exc_info=True)
+    except Exception as exc:
+        # No exc_info: the traceback/message can contain the wunderground key.
+        log.info(
+            "external fetch failed for provider %s: %s",
+            cfg.provider,
+            _scrub(str(exc), cfg.api_key),
+        )
         return None
 
     if obs is None:

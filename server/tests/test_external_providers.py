@@ -171,6 +171,23 @@ def test_fetch_external_wunderground_uses_station_and_key() -> None:
     assert obs is not None and obs.station_id == "KCOELIZA85"
 
 
+def test_wunderground_api_key_not_logged_on_failure(caplog: pytest.LogCaptureFixture) -> None:
+    cfg = ExternalConfig(
+        enabled=True, provider="wunderground", station_id="KX", api_key="SUPERSECRETKEY"
+    )
+
+    def boom(url: str, headers: dict[str, str] | None, timeout: float) -> Any:
+        # Mimics requests/urllib3 embedding the full URL (with the key) in the error.
+        raise ConnectionError(f"Max retries exceeded with url: {url}")
+
+    import logging
+
+    with caplog.at_level(logging.INFO):
+        assert p.fetch_external(cfg, 39.0, -104.0, http_get=boom) is None
+    assert "SUPERSECRETKEY" not in caplog.text
+    assert "***" in caplog.text
+
+
 def test_fetch_external_nws_with_configured_station() -> None:
     cfg = ExternalConfig(enabled=True, provider="nws", station_id="KBJC")
     obs = p.fetch_external(cfg, 39.4, -104.5, http_get=_fake_http(_NWS_SAMPLE))

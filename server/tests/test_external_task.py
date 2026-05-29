@@ -86,3 +86,29 @@ async def test_loop_survives_fetch_failure(tmp_path, monkeypatch) -> None:
 
     assert calls["n"] >= 1  # it tried
     assert store.get() is None  # failure left the store empty, no crash
+
+
+async def test_loop_keeps_empty_when_fetch_returns_none(tmp_path, monkeypatch) -> None:
+    db = init_db(tmp_path / "w.db")
+    cfg = _config({"enabled": True, "refresh_interval_seconds": 600})
+    store = ExternalStore()
+
+    calls = {"n": 0}
+
+    def none_fetch(*args, **kwargs):
+        calls["n"] += 1
+        return None  # provider up, but no data (e.g. station calm/missing)
+
+    monkeypatch.setattr("weather_server.external.task.fetch_external", none_fetch)
+
+    task = asyncio.create_task(external_fetch_loop(cfg, db, store))
+    for _ in range(50):
+        await asyncio.sleep(0.01)
+        if calls["n"] >= 1:
+            break
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert calls["n"] >= 1
+    assert store.get() is None  # nothing stored, loop kept running

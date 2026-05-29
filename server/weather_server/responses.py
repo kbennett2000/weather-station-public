@@ -314,6 +314,7 @@ def _build_moon_block(server_time: datetime, lat: float, lon: float, tz_name: st
     pos = astro.moon_position(server_time, lat, lon)
     illum = astro.moon_illumination(server_time)
     times = astro.moon_times(server_time, lat, lon)
+    next_new, next_full = astro.upcoming_moon_phases(server_time)
     return MoonBlock(
         altitude_deg=pos.altitude_deg,
         azimuth_deg=pos.azimuth_deg,
@@ -325,8 +326,8 @@ def _build_moon_block(server_time: datetime, lat: float, lon: float, tz_name: st
         moonset=_to_local(times.get("set"), tz_name),
         always_up=bool(times.get("always_up", False)),
         always_down=bool(times.get("always_down", False)),
-        next_new_moon=_to_local(astro.next_moon_phase(server_time, 0.0), tz_name),
-        next_full_moon=_to_local(astro.next_moon_phase(server_time, 0.5), tz_name),
+        next_new_moon=_to_local(next_new, tz_name),
+        next_full_moon=_to_local(next_full, tz_name),
     )
 
 

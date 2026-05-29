@@ -465,6 +465,23 @@ def _refine_min(lo: datetime, hi: datetime, target: float) -> datetime:
     return best
 
 
+@lru_cache(maxsize=4)
+def _moon_phases_at_hour(
+    stamp: tuple[int, int, int, int],
+) -> tuple[datetime | None, datetime | None]:
+    y, mo, da, hr = stamp
+    base = datetime(y, mo, da, hr, tzinfo=UTC)
+    return next_moon_phase(base, 0.0), next_moon_phase(base, 0.5)
+
+
+def upcoming_moon_phases(d: datetime) -> tuple[datetime | None, datetime | None]:
+    """Next (new, full) moon after `d`. Moon phase is location-independent, so
+    this is cached at UTC-hour granularity — the ~1000-iteration scan runs at
+    most once per hour rather than twice per request (matters on a Pi Zero)."""
+    b = (d if d.tzinfo else d.replace(tzinfo=UTC)).astimezone(UTC)
+    return _moon_phases_at_hour((b.year, b.month, b.day, b.hour))
+
+
 # ── timezone resolution ─────────────────────────────────────────────────────
 
 

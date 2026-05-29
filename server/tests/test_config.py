@@ -25,8 +25,12 @@ def test_sensor_by_id_and_outdoor() -> None:
     assert config.outdoor is not None
     assert config.outdoor.has_gps is True
     assert config.outdoor.fallback_altitude_m == pytest.approx(1609.3)
-    assert config.outdoor.fallback_lat == pytest.approx(39.7392)
-    assert config.outdoor.fallback_lon == pytest.approx(-104.9903)
+    # Coordinates are redacted in the public example; just verify they parse as
+    # in-range floats rather than pinning a specific location.
+    assert config.outdoor.fallback_lat is not None
+    assert -90.0 <= config.outdoor.fallback_lat <= 90.0
+    assert config.outdoor.fallback_lon is not None
+    assert -180.0 <= config.outdoor.fallback_lon <= 180.0
 
 
 def test_fixture_mode_false_when_development_block_absent() -> None:

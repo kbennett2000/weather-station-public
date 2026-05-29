@@ -154,6 +154,18 @@ def test_summary_today_period_label(client: TestClient) -> None:
     assert parsed.period == "today"
 
 
+def test_summary_empty_db_returns_null_stats(client: TestClient) -> None:
+    client.app.state.db.execute("DELETE FROM outdoor_readings")
+    r = client.get("/api/v1/summary/outdoor?period=7d")
+    assert r.status_code == 200
+    parsed = schemas.SummaryResponse.model_validate(r.json())
+    assert parsed.sample_count == 0
+    assert parsed.temperature_c is None
+    assert parsed.pressure_trend is None
+    assert parsed.heating_degree_days_f is None
+    assert parsed.light_integral_mol_m2 is None
+
+
 def test_summary_indoor_404_history_not_available(client: TestClient) -> None:
     r = client.get("/api/v1/summary/indoor")
     assert r.status_code == 404

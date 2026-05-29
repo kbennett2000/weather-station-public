@@ -66,7 +66,11 @@ def _reference_location(
     row = db_module.latest_outdoor_reading(db)
     if row is not None and row["latitude"] is not None and row["longitude"] is not None:
         return float(row["latitude"]), float(row["longitude"])
-    if outdoor is not None and outdoor.fallback_lat is not None:
+    if (
+        outdoor is not None
+        and outdoor.fallback_lat is not None
+        and outdoor.fallback_lon is not None
+    ):
         return outdoor.fallback_lat, outdoor.fallback_lon
     return None, None
 
@@ -127,7 +131,7 @@ def _summarize(
     dewpoint_stat = sm.stat(dewpoint)
     tendency, trend = sm.pressure_tendency(times, p_station)
 
-    hdd, cdd, gdd, hargreaves = _accumulate_daily(by_day, lat, from_ts)
+    hdd, cdd, gdd, hargreaves = _accumulate_daily(by_day, lat)
 
     return SummaryResponse(
         sensor_id=sensor_id,
@@ -157,7 +161,7 @@ def _summarize(
 
 
 def _accumulate_daily(
-    by_day: dict[str, list[float]], lat: float | None, from_ts: int
+    by_day: dict[str, list[float]], lat: float | None
 ) -> tuple[float | None, float | None, float | None, float | None]:
     """Sum per-day degree days and Hargreaves ET₀ across the window."""
     if not by_day:
