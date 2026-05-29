@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from ..responses import build_external, external_stale_after, utc_now
+from .. import db as db_module
+from ..responses import (
+    build_external,
+    build_outdoor_reading_from_db_row,
+    external_stale_after,
+    utc_now,
+)
 from ..schemas import ExternalResponse
 
 router = APIRouter()
@@ -23,9 +29,19 @@ router = APIRouter()
 async def get_external(request: Request) -> ExternalResponse:
     server_time = utc_now()
     config = request.app.state.config
+    db = request.app.state.db
+
+    # The fused indices (wind chill etc.) need the local outdoor reading.
+    outdoor_reading = None
+    if config.outdoor is not None:
+        row = db_module.latest_outdoor_reading(db)
+        if row is not None:
+            outdoor_reading = build_outdoor_reading_from_db_row(config.outdoor, row, server_time)
+
     external = build_external(
         request.app.state.external_store.get(),
         server_time,
         stale_after_seconds=external_stale_after(config),
+        outdoor_reading=outdoor_reading,
     )
     return ExternalResponse(server_time=server_time, external=external)

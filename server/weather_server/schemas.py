@@ -213,6 +213,17 @@ class ExternalBlock(_StrictModel):
     visibility_m: float | None = None
     visibility_km: float | None = None
 
+    # fused indices — local sensors + external wind (null without wind)
+    wind_chill_c: float | None = None
+    wind_chill_f: float | None = None
+    apparent_temperature_c: float | None = None
+    apparent_temperature_f: float | None = None
+    beaufort_force: int | None = None
+    beaufort_description: str | None = None
+    thsw_index_c: float | None = None
+    thsw_index_f: float | None = None
+    et0_mm_hour: float | None = None
+
 
 # ── Endpoint responses ───────────────────────────────────────────────────────
 

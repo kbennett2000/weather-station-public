@@ -65,6 +65,7 @@ async def get_current(request: Request) -> CurrentResponse:
         request.app.state.external_store.get(),
         server_time,
         stale_after_seconds=external_stale_after(config),
+        outdoor_reading=outdoor_reading,
     )
     return CurrentResponse(
         server_time=server_time,
@@ -119,6 +120,7 @@ async def get_current_one(sensor_id: str, request: Request) -> CurrentSensorResp
         request.app.state.external_store.get(),
         server_time,
         stale_after_seconds=external_stale_after(config),
+        outdoor_reading=reading if sensor_cfg.role == "outdoor" else None,
     )
     return CurrentSensorResponse(
         server_time=server_time,
