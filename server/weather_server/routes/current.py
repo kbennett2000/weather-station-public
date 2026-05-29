@@ -13,8 +13,10 @@ from ..cache import TTLCache
 from ..config import SensorConfig
 from ..responses import (
     build_astronomy,
+    build_external,
     build_live_reading,
     build_outdoor_reading_from_db_row,
+    external_stale_after,
     utc_now,
 )
 from ..schemas import CurrentResponse, CurrentSensorResponse, SensorReading
@@ -59,7 +61,17 @@ async def get_current(request: Request) -> CurrentResponse:
             sensors_out[sensor_cfg.id] = reading
 
     astronomy = build_astronomy(server_time, config, outdoor_reading)
-    return CurrentResponse(server_time=server_time, sensors=sensors_out, astronomy=astronomy)
+    external = build_external(
+        request.app.state.external_store.get(),
+        server_time,
+        stale_after_seconds=external_stale_after(config),
+    )
+    return CurrentResponse(
+        server_time=server_time,
+        sensors=sensors_out,
+        astronomy=astronomy,
+        external=external,
+    )
 
 
 @router.get(
@@ -103,7 +115,17 @@ async def get_current_one(sensor_id: str, request: Request) -> CurrentSensorResp
         config,
         reading if sensor_cfg.role == "outdoor" else None,
     )
-    return CurrentSensorResponse(server_time=server_time, sensor=reading, astronomy=astronomy)
+    external = build_external(
+        request.app.state.external_store.get(),
+        server_time,
+        stale_after_seconds=external_stale_after(config),
+    )
+    return CurrentSensorResponse(
+        server_time=server_time,
+        sensor=reading,
+        astronomy=astronomy,
+        external=external,
+    )
 
 
 async def _poll_with_cache(

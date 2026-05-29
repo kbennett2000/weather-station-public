@@ -39,6 +39,29 @@ class DevelopmentConfig:
     fixture_dir: str | None = None
 
 
+# Optional internet-sourced regional conditions (wind etc.). Disabled by
+# default: when the [external] section is absent the fetch task never
+# spawns and the server behaves exactly as an offline-only deployment.
+_EXTERNAL_PROVIDERS = ("open-meteo", "nws", "wunderground")
+_EXTERNAL_FETCH_DEFAULT = ("wind", "cloud", "uv", "precip", "visibility")
+
+
+@dataclass(frozen=True)
+class ExternalConfig:
+    enabled: bool = False
+    provider: str = "open-meteo"
+    refresh_interval_seconds: int = 300
+    http_timeout_seconds: int = 8
+    fetch: tuple[str, ...] = _EXTERNAL_FETCH_DEFAULT
+    cross_check: bool = False
+    station_id: str | None = None
+    api_key: str | None = None
+    # Override the reference coordinates. When unset, the outdoor sensor's
+    # GPS (or its configured fallback_lat/lon) is used.
+    lat_override: float | None = None
+    lon_override: float | None = None
+
+
 @dataclass(frozen=True)
 class SensorConfig:
     id: str
@@ -59,6 +82,7 @@ class Config:
     logger: LoggerConfig
     cache: CacheConfig
     development: DevelopmentConfig
+    external: ExternalConfig = field(default_factory=ExternalConfig)
     sensors: list[SensorConfig] = field(default_factory=list)
 
     def sensor_by_id(self, sensor_id: str) -> SensorConfig | None:
@@ -97,6 +121,7 @@ def _parse(raw: dict[str, Any]) -> Config:
     logger = LoggerConfig(**raw.get("logger", {}))
     cache = CacheConfig(**raw.get("cache", {}))
     development = DevelopmentConfig(**raw.get("development", {}))
+    external = _parse_external(raw.get("external", {}))
     sensors_raw = raw.get("sensors", [])
     sensors = [SensorConfig(**s) for s in sensors_raw]
     if not sensors:
@@ -111,5 +136,23 @@ def _parse(raw: dict[str, Any]) -> Config:
         logger=logger,
         cache=cache,
         development=development,
+        external=external,
         sensors=sensors,
     )
+
+
+def _parse_external(raw: dict[str, Any]) -> ExternalConfig:
+    data = dict(raw)
+    if "fetch" in data and data["fetch"] is not None:
+        data["fetch"] = tuple(data["fetch"])
+    cfg = ExternalConfig(**data)
+    if cfg.provider not in _EXTERNAL_PROVIDERS:
+        raise ValueError(
+            f"[external] provider must be one of {_EXTERNAL_PROVIDERS}, got {cfg.provider!r}"
+        )
+    if cfg.enabled and cfg.provider == "wunderground":
+        if not cfg.station_id or not cfg.api_key:
+            raise ValueError(
+                "[external] provider 'wunderground' requires both station_id and api_key"
+            )
+    return cfg

@@ -14,11 +14,13 @@ from .config import Config, SensorConfig
 from .derivations import astronomy as astro
 from .derivations import location as loc
 from .derivations import readings as rd
+from .external import Observation, cardinal_from_deg
 from .schemas import (
     Astronomy,
     CalibrationBlock,
     DerivedReading,
     DeviceBlock,
+    ExternalBlock,
     LocationBlock,
     MoonBlock,
     RawReading,
@@ -26,6 +28,10 @@ from .schemas import (
     SensorReading,
     SunBlock,
 )
+
+MS_TO_KMH = 3.6
+MS_TO_MPH = 2.236936
+MS_TO_KT = 1.943844
 
 
 def utc_now() -> datetime:
@@ -253,6 +259,70 @@ def _build_moon_block(server_time: datetime, lat: float, lon: float, tz_name: st
         always_up=bool(times.get("always_up", False)),
         always_down=bool(times.get("always_down", False)),
     )
+
+
+# ── external (internet-sourced regional conditions) ──────────────────────────
+
+
+def _round(value: float | None, ndigits: int = 1) -> float | None:
+    return None if value is None else round(value, ndigits)
+
+
+def build_external(
+    store_result: tuple[Observation, datetime] | None,
+    server_time: datetime,
+    *,
+    stale_after_seconds: float,
+) -> ExternalBlock | None:
+    """Map the last-known external observation to an ExternalBlock.
+
+    Returns None when nothing has ever been fetched (feed disabled or no
+    successful fetch yet) — that is the offline/absent state. Wind speed is
+    converted from the internal m/s to every display unit.
+    """
+    if store_result is None:
+        return None
+    obs, fetched_at = store_result
+
+    reference_ts = obs.observed_at or fetched_at
+    age = (server_time - reference_ts).total_seconds()
+    stale = age > stale_after_seconds
+
+    ws = obs.wind_speed_ms
+    wg = obs.wind_gust_ms
+    vis = obs.visibility_m
+
+    return ExternalBlock(
+        provider=obs.provider,
+        source=obs.source,
+        station_id=obs.station_id,
+        distance_km=obs.distance_km,
+        observed_at=obs.observed_at,
+        fetched_at=fetched_at,
+        age_seconds=round(age, 1),
+        stale=stale,
+        confidence=obs.confidence,
+        wind_speed_ms=_round(ws),
+        wind_speed_kmh=_round(None if ws is None else ws * MS_TO_KMH),
+        wind_speed_mph=_round(None if ws is None else ws * MS_TO_MPH),
+        wind_speed_kt=_round(None if ws is None else ws * MS_TO_KT),
+        wind_gust_ms=_round(wg),
+        wind_gust_kmh=_round(None if wg is None else wg * MS_TO_KMH),
+        wind_gust_mph=_round(None if wg is None else wg * MS_TO_MPH),
+        wind_direction_deg=_round(obs.wind_direction_deg),
+        wind_direction_cardinal=cardinal_from_deg(obs.wind_direction_deg),
+        cloud_cover_pct=_round(obs.cloud_cover_pct),
+        uv_index=_round(obs.uv_index),
+        precip_mm=_round(obs.precip_mm, 2),
+        visibility_m=_round(vis, 0),
+        visibility_km=_round(None if vis is None else vis / 1000.0, 1),
+    )
+
+
+def external_stale_after(config: Config) -> float:
+    """How old an external observation may get before it's flagged stale:
+    three refresh intervals, floored at 15 minutes."""
+    return max(900.0, 3.0 * config.external.refresh_interval_seconds)
 
 
 # ── history rows ────────────────────────────────────────────────────────────

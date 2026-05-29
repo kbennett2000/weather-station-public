@@ -11,6 +11,11 @@ Field provenance taxonomy from the API design doc:
 - D-LOCATION    — derived from GPS coords
 - D-TIME        — derived from clock + location
 - META          — server bookkeeping
+
+Two tags extend the original taxonomy (flagged for docs/design/02-api-design.md):
+- EXTERNAL      — internet-sourced regional data (wind etc.) and anything
+                  fused from it; OPTIONAL — absent/null when offline
+- D-HISTORY     — derived from the logged time series (see SummaryResponse)
 """
 
 from __future__ import annotations
@@ -132,6 +137,47 @@ class Astronomy(_StrictModel):
     moon: MoonBlock
 
 
+# ── External (internet-sourced regional conditions) ──────────────────────────
+
+
+class ExternalBlock(_StrictModel):
+    """Internet-sourced regional conditions (EXTERNAL provenance).
+
+    OPTIONAL: the whole block is null/absent when the feed is disabled or no
+    internet is available. Its presence is the only thing that differs between
+    an online and an offline server — everything else is always present.
+    """
+
+    # provenance / freshness metadata
+    provider: str | None = None  # "open-meteo" | "nws" | "wunderground"
+    source: str | None = None  # human label, e.g. "nws:KBJC"
+    station_id: str | None = None
+    distance_km: float | None = None
+    observed_at: datetime | None = None
+    fetched_at: datetime | None = None
+    age_seconds: float | None = None
+    stale: bool | None = None
+    confidence: str | None = None  # "normal" | "low"
+
+    # wind
+    wind_speed_ms: float | None = None
+    wind_speed_kmh: float | None = None
+    wind_speed_mph: float | None = None
+    wind_speed_kt: float | None = None
+    wind_gust_ms: float | None = None
+    wind_gust_kmh: float | None = None
+    wind_gust_mph: float | None = None
+    wind_direction_deg: float | None = None
+    wind_direction_cardinal: str | None = None
+
+    # other regional conditions
+    cloud_cover_pct: float | None = None
+    uv_index: float | None = None
+    precip_mm: float | None = None
+    visibility_m: float | None = None
+    visibility_km: float | None = None
+
+
 # ── Endpoint responses ───────────────────────────────────────────────────────
 
 
@@ -139,12 +185,19 @@ class CurrentResponse(_StrictModel):
     server_time: datetime
     sensors: dict[str, SensorReading]
     astronomy: Astronomy
+    external: ExternalBlock | None = None
 
 
 class CurrentSensorResponse(_StrictModel):
     server_time: datetime
     sensor: SensorReading
     astronomy: Astronomy
+    external: ExternalBlock | None = None
+
+
+class ExternalResponse(_StrictModel):
+    server_time: datetime
+    external: ExternalBlock | None = None
 
 
 class HistoryRow(_StrictModel):

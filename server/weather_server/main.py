@@ -25,8 +25,10 @@ from .branding import load_branding
 from .cache import TTLCache
 from .config import load_config
 from .db import init_db
+from .external import ExternalStore
+from .external.task import external_fetch_loop
 from .logger_task import outdoor_logger_loop
-from .routes import astronomy, branding, current, health, history, sensors
+from .routes import astronomy, branding, current, external, health, history, sensors
 from .schemas import ErrorBody, ErrorResponse
 from .sensors import make_source
 
@@ -49,24 +51,34 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         http_timeout_seconds=config.logger.http_timeout_seconds,
     )
 
+    external_store = ExternalStore()
+
     app.state.config = config
     app.state.db = db_conn
     app.state.cache = cache
     app.state.source = source
     app.state.last_seen = {}
+    app.state.external_store = external_store
     app.state.branding = load_branding(config.server.branding_path)
 
     logger_task = asyncio.create_task(outdoor_logger_loop(config, source, db_conn))
     app.state.logger_task = logger_task
+    # Optional: only spawns a live loop when [external] is enabled; otherwise
+    # returns immediately and the store stays empty (external block ⇒ null).
+    external_task = asyncio.create_task(
+        external_fetch_loop(config, db_conn, external_store)
+    )
+    app.state.external_task = external_task
 
     try:
         yield
     finally:
-        logger_task.cancel()
-        try:
-            await logger_task
-        except asyncio.CancelledError:
-            pass
+        for task in (logger_task, external_task):
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         db_conn.close()
         log.info("shutdown complete")
 
@@ -92,6 +104,7 @@ def create_app() -> FastAPI:
     app.include_router(history.router, tags=["history"])
     app.include_router(sensors.router, tags=["sensors"])
     app.include_router(astronomy.router, tags=["astronomy"])
+    app.include_router(external.router, tags=["external"])
     app.include_router(branding.router, tags=["branding"])
     app.include_router(health.router, tags=["health"])
 
