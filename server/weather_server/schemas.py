@@ -150,6 +150,26 @@ class SunBlock(_StrictModel):
     seconds_to_sunset: float | None = None
     seconds_to_sunrise: float | None = None
 
+    # Extended twilight bands and photography windows (D-TIME).
+    nautical_dawn: datetime | None = None
+    nautical_dusk: datetime | None = None
+    astronomical_dawn: datetime | None = None
+    astronomical_dusk: datetime | None = None
+    golden_hour_dawn: datetime | None = None  # sun reaches +6° (morning)
+    golden_hour_dusk: datetime | None = None  # sun drops to +6° (evening)
+    blue_hour_dawn: datetime | None = None  # sun at -4° (morning)
+    blue_hour_dusk: datetime | None = None  # sun at -4° (evening)
+
+    sunrise_azimuth_deg: float | None = None
+    sunset_azimuth_deg: float | None = None
+    shadow_multiplier: float | None = None  # shadow length ÷ object height
+    day_length_change_seconds: float | None = None  # vs. yesterday (+ = gaining)
+
+    season: str | None = None
+    next_solar_event: str | None = None
+    next_solar_event_time: datetime | None = None
+    seconds_to_next_solar_event: float | None = None
+
 
 class MoonBlock(_StrictModel):
     altitude_deg: float | None = None
@@ -162,6 +182,8 @@ class MoonBlock(_StrictModel):
     moonset: datetime | None = None
     always_up: bool | None = None
     always_down: bool | None = None
+    next_new_moon: datetime | None = None
+    next_full_moon: datetime | None = None
 
 
 class Astronomy(_StrictModel):

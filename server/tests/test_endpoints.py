@@ -191,6 +191,21 @@ def test_astronomy_endpoint(client: TestClient) -> None:
     assert parsed.astronomy.reference_location.source == "outdoor_sensor"
 
 
+def test_astronomy_includes_extended_fields(client: TestClient) -> None:
+    parsed = schemas.AstronomyResponse.model_validate(client.get("/api/v1/astronomy").json())
+    sun = parsed.astronomy.sun
+    moon = parsed.astronomy.moon
+    # Denver latitude gets all twilight bands year-round.
+    assert sun.nautical_dawn is not None
+    assert sun.astronomical_dawn is not None
+    assert sun.golden_hour_dusk is not None
+    assert sun.season is not None
+    assert sun.next_solar_event is not None
+    assert sun.next_solar_event_time is not None
+    assert moon.next_new_moon is not None
+    assert moon.next_full_moon is not None
+
+
 def test_astronomy_with_lat_lon_override(client: TestClient) -> None:
     r = client.get("/api/v1/astronomy?lat=51.5074&lon=-0.1278")
     assert r.status_code == 200

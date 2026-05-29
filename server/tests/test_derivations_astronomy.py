@@ -69,6 +69,48 @@ def test_moon_times_returns_expected_keys(summer_noon_utc: datetime) -> None:
     assert set(result.keys()) == {"rise", "set", "always_up", "always_down"}
 
 
+def test_sun_event_twilight_ordering(summer_noon_utc: datetime) -> None:
+    # Astronomical (-18) dawn is earlier than nautical (-12) than civil (-6).
+    astro_dawn, _ = astronomy.sun_event(summer_noon_utc, DENVER_LAT, DENVER_LON, -18.0)
+    naut_dawn, _ = astronomy.sun_event(summer_noon_utc, DENVER_LAT, DENVER_LON, -12.0)
+    civil_dawn, _ = astronomy.sun_event(summer_noon_utc, DENVER_LAT, DENVER_LON, -6.0)
+    assert astro_dawn is not None and naut_dawn is not None and civil_dawn is not None
+    assert astro_dawn < naut_dawn < civil_dawn
+
+
+def test_sun_event_golden_hour_returns_pair(summer_noon_utc: datetime) -> None:
+    dawn, dusk = astronomy.sun_event(summer_noon_utc, DENVER_LAT, DENVER_LON, 6.0)
+    assert dawn is not None and dusk is not None and dawn < dusk
+
+
+def test_shadow_multiplier() -> None:
+    assert astronomy.shadow_multiplier(45.0) == pytest.approx(1.0)
+    assert astronomy.shadow_multiplier(30.0) == pytest.approx(1.732, abs=0.01)
+    assert astronomy.shadow_multiplier(0.0) is None
+    assert astronomy.shadow_multiplier(-5.0) is None
+
+
+def test_season_info_hemisphere_flip() -> None:
+    d = datetime(2026, 1, 15, tzinfo=UTC)  # after Dec solstice, before Mar equinox
+    north = astronomy.season_info(d, 40.0)
+    south = astronomy.season_info(d, -40.0)
+    assert north.season == "Winter"
+    assert south.season == "Summer"
+    assert north.next_event == "march_equinox"
+    assert north.next_event_time > d
+    assert north.seconds_to_next_event > 0
+
+
+def test_next_moon_phase_finds_future_target(summer_noon_utc: datetime) -> None:
+    new_moon = astronomy.next_moon_phase(summer_noon_utc, 0.0)
+    full_moon = astronomy.next_moon_phase(summer_noon_utc, 0.5)
+    assert new_moon is not None and new_moon > summer_noon_utc
+    assert full_moon is not None and full_moon > summer_noon_utc
+    # The phase at the returned time should match the target.
+    assert astronomy.moon_illumination(new_moon).phase == pytest.approx(0.0, abs=0.02)
+    assert astronomy.moon_illumination(full_moon).phase == pytest.approx(0.5, abs=0.02)
+
+
 def test_resolve_timezone_for_denver_returns_iana_name() -> None:
     tz = astronomy.resolve_timezone(DENVER_LAT, DENVER_LON)
     assert tz == "America/Denver"

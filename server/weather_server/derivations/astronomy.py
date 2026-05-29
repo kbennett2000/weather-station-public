@@ -341,6 +341,130 @@ def moon_times(d: datetime, lat: float, lon: float) -> dict[str, Any]:
     return result
 
 
+# ── extra sun events / season ────────────────────────────────────────────────
+
+
+def sun_event(
+    d: datetime, lat: float, lon: float, angle_deg: float
+) -> tuple[datetime | None, datetime | None]:
+    """Morning and evening times the sun reaches `angle_deg` elevation on the
+    local day containing `d`. Negative angles are below the horizon (twilight
+    bands); positive angles are above (golden hour). (None, None) if the sun
+    never reaches that angle that day."""
+    lw = RAD * -lon
+    phi = RAD * lat
+    days = _to_days(d)
+    n = _julian_cycle(days, lw)
+    ds = _approx_transit(0, lw, n)
+    m = _solar_mean_anomaly(ds)
+    l_ = _ecliptic_longitude(m)
+    dec = _declination(l_, 0)
+    j_noon = _solar_transit_j(ds, m, l_)
+    try:
+        j_set = _get_set_j(angle_deg * RAD, lw, phi, dec, n, m, l_)
+    except ValueError:
+        return None, None
+    j_rise = j_noon - (j_set - j_noon)
+    return _from_julian(j_rise), _from_julian(j_set)
+
+
+def shadow_multiplier(sun_altitude_deg: float) -> float | None:
+    """Length of an object's shadow as a multiple of its height. None when the
+    sun is at or below the horizon (shadow is effectively infinite)."""
+    if sun_altitude_deg <= 0:
+        return None
+    return 1.0 / math.tan(math.radians(sun_altitude_deg))
+
+
+# Approximate UTC dates of the equinoxes/solstices — within a day or two, which
+# is plenty for a season label and a countdown.
+def _solar_events(year: int) -> list[tuple[datetime, str]]:
+    return [
+        (datetime(year, 3, 20, tzinfo=UTC), "march_equinox"),
+        (datetime(year, 6, 21, tzinfo=UTC), "june_solstice"),
+        (datetime(year, 9, 22, tzinfo=UTC), "september_equinox"),
+        (datetime(year, 12, 21, tzinfo=UTC), "december_solstice"),
+    ]
+
+
+_SEASON_BY_START = {
+    "march_equinox": ("Spring", "Autumn"),
+    "june_solstice": ("Summer", "Winter"),
+    "september_equinox": ("Autumn", "Spring"),
+    "december_solstice": ("Winter", "Summer"),
+}
+
+
+@dataclass(frozen=True)
+class SeasonInfo:
+    season: str
+    next_event: str
+    next_event_time: datetime
+    seconds_to_next_event: float
+
+
+def season_info(d: datetime, lat: float) -> SeasonInfo:
+    """Current astronomical season (hemisphere-aware) and the next
+    equinox/solstice."""
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=UTC)
+    events = sorted(
+        _solar_events(d.year - 1) + _solar_events(d.year) + _solar_events(d.year + 1)
+    )
+    prev_name = events[0][1]
+    next_time, next_name = events[-1]
+    for t, name in events:
+        if t > d:
+            next_time, next_name = t, name
+            break
+        prev_name = name
+    north, south = _SEASON_BY_START[prev_name]
+    season = north if lat >= 0 else south
+    return SeasonInfo(
+        season=season,
+        next_event=next_name,
+        next_event_time=next_time,
+        seconds_to_next_event=(next_time - d).total_seconds(),
+    )
+
+
+def _phase_distance(d: datetime, target: float) -> float:
+    """Circular distance (0..0.5) between the moon phase and `target`. The
+    moon-phase value is discontinuous at new moon, so we minimize this distance
+    rather than hunt for a sign change."""
+    p = moon_illumination(d).phase
+    raw = abs(p - target) % 1.0
+    return min(raw, 1.0 - raw)
+
+
+def next_moon_phase(d: datetime, target: float) -> datetime | None:
+    """Next time after `d` the moon reaches `target` phase (0.0 new, 0.5 full).
+    Coarse 2-hour scan to bracket the minimum-distance point, then a 1-minute
+    refine within the bracket."""
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=UTC)
+    coarse = timedelta(hours=2)
+    prev_dist = _phase_distance(d, target)
+    for i in range(1, int(35 * 24 / 2)):
+        t = d + coarse * i
+        dist = _phase_distance(t, target)
+        if dist > prev_dist and prev_dist < 0.05:
+            return _refine_min(t - coarse * 2, t, target)
+        prev_dist = dist
+    return None
+
+
+def _refine_min(lo: datetime, hi: datetime, target: float) -> datetime:
+    best, best_dist = lo, _phase_distance(lo, target)
+    minutes = int((hi - lo).total_seconds() / 60)
+    for k in range(1, minutes + 1):
+        t = lo + timedelta(minutes=k)
+        dist = _phase_distance(t, target)
+        if dist < best_dist:
+            best, best_dist = t, dist
+    return best
+
+
 # ── timezone resolution ─────────────────────────────────────────────────────
 
 

@@ -255,6 +255,30 @@ def _build_sun_block(server_time: datetime, lat: float, lon: float, tz_name: str
         )
         secs_to_sunrise = (tomorrow_sunrise - server_time).total_seconds()
 
+    nautical_dawn, nautical_dusk = astro.sun_event(server_time, lat, lon, -12.0)
+    astro_dawn, astro_dusk = astro.sun_event(server_time, lat, lon, -18.0)
+    golden_dawn, golden_dusk = astro.sun_event(server_time, lat, lon, 6.0)
+    blue_dawn, blue_dusk = astro.sun_event(server_time, lat, lon, -4.0)
+
+    sunrise_az = (
+        astro.sun_position(times.sunrise, lat, lon).azimuth_deg
+        if times.sunrise is not None
+        else None
+    )
+    sunset_az = (
+        astro.sun_position(times.sunset, lat, lon).azimuth_deg
+        if times.sunset is not None
+        else None
+    )
+
+    day_length_change: float | None = None
+    if day_length is not None:
+        y = astro.sun_times(server_time - timedelta(days=1), lat, lon)
+        if y.sunrise is not None and y.sunset is not None:
+            day_length_change = day_length - (y.sunset - y.sunrise).total_seconds()
+
+    season = astro.season_info(server_time, lat)
+
     return SunBlock(
         altitude_deg=pos.altitude_deg,
         azimuth_deg=pos.azimuth_deg,
@@ -267,6 +291,22 @@ def _build_sun_block(server_time: datetime, lat: float, lon: float, tz_name: str
         day_length_seconds=day_length,
         seconds_to_sunset=secs_to_sunset,
         seconds_to_sunrise=secs_to_sunrise,
+        nautical_dawn=_to_local(nautical_dawn, tz_name),
+        nautical_dusk=_to_local(nautical_dusk, tz_name),
+        astronomical_dawn=_to_local(astro_dawn, tz_name),
+        astronomical_dusk=_to_local(astro_dusk, tz_name),
+        golden_hour_dawn=_to_local(golden_dawn, tz_name),
+        golden_hour_dusk=_to_local(golden_dusk, tz_name),
+        blue_hour_dawn=_to_local(blue_dawn, tz_name),
+        blue_hour_dusk=_to_local(blue_dusk, tz_name),
+        sunrise_azimuth_deg=sunrise_az,
+        sunset_azimuth_deg=sunset_az,
+        shadow_multiplier=astro.shadow_multiplier(pos.altitude_deg),
+        day_length_change_seconds=day_length_change,
+        season=season.season,
+        next_solar_event=season.next_event,
+        next_solar_event_time=_to_local(season.next_event_time, tz_name),
+        seconds_to_next_solar_event=season.seconds_to_next_event,
     )
 
 
@@ -285,6 +325,8 @@ def _build_moon_block(server_time: datetime, lat: float, lon: float, tz_name: st
         moonset=_to_local(times.get("set"), tz_name),
         always_up=bool(times.get("always_up", False)),
         always_down=bool(times.get("always_down", False)),
+        next_new_moon=_to_local(astro.next_moon_phase(server_time, 0.0), tz_name),
+        next_full_moon=_to_local(astro.next_moon_phase(server_time, 0.5), tz_name),
     )
 
 
