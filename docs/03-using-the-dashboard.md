@@ -34,7 +34,7 @@ From left to right:
 
 The hero panel. Air temperature in big amber readout because that's the question 90% of people open the dashboard to answer.
 
-- **Temperature** — big number is °F; subtitle gives °C and the `feels-like` value. Feels-like uses the NWS heat-index formula (Rothfusz regression) on the warm side — above ~80°F with non-trivial humidity, expect it to read higher than the air temperature. Below the heat-index threshold it collapses to air temp. Wind chill on the cold side is **not** computed (no anemometer on the outdoor sensor), so on cold windy days feels-like will under-report the chill.
+- **Temperature** — big number is °F; subtitle gives °C and the `feels-like` value. Feels-like uses the NWS heat-index formula (Rothfusz regression) on the warm side — above ~80°F with non-trivial humidity, expect it to read higher than the air temperature. Below the heat-index threshold it collapses to air temp. Wind chill on the cold side is **not** part of this local `feels-like` (no anemometer on the outdoor sensor) — but if you enable the optional internet feed (see the `[external]` config), a full-range apparent temperature, wind chill, and THSW index appear in the **Regional** panel and the dashboard's headline feels-like switches to the wind-aware value automatically.
 - **Humidity** — relative humidity %. The smaller `g/m³ absolute` is absolute humidity (grams of water vapour per cubic metre of air), useful when you care about whether your house is gaining or losing moisture in absolute terms rather than relative to current temperature.
 - **Dew Point** — temperature at which the current air would have to cool for moisture to condense. Lower than air temperature means the air is unsaturated; closer they get, the more humid it feels. Practical cutoffs:
   - dew point < 55°F: dry, comfortable
@@ -251,14 +251,23 @@ Everything you see on the dashboard, plus more, is available as JSON from the se
 
 | Endpoint | What it gives you |
 |---|---|
-| `GET /api/v1/current` | Latest reading from every sensor + the full astronomy block |
-| `GET /api/v1/current/{sensor_id}` | One sensor's latest reading + astronomy |
-| `GET /api/v1/history/outdoor` | Time-bucketed outdoor history (the chart data) |
+| `GET /api/v1/current` | Latest reading from every sensor + the full astronomy block + the optional `external` block (null when the internet feed is off) |
+| `GET /api/v1/current/{sensor_id}` | One sensor's latest reading + astronomy + `external` |
+| `GET /api/v1/history/outdoor` | Time-bucketed outdoor history (the chart data). Window via `?hours=` or explicit `?from=&to=` (ISO 8601) |
+| `GET /api/v1/summary/outdoor` | Windowed history summary: hi/lo/avg, pressure tendency, degree days, DLI, ET₀ (`?period=today\|24h\|7d\|30d`) |
+| `GET /api/v1/external` | The internet-sourced regional block alone: wind, cloud, UV, precip, visibility + fused comfort indices (null when offline) |
 | `GET /api/v1/sensors` | Sensors registered with the server + their status |
 | `GET /api/v1/astronomy` | Just the astronomy block (sun + moon at the reference location) |
 | `GET /api/v1/branding` | The parsed `branding.toml` (used by the dashboard itself) |
 | `GET /api/v1/health` | Server / DB / loggers / sensors aggregate health |
 | `GET /docs` | Interactive OpenAPI explorer — every endpoint, every parameter, try-it-out |
+
+> **More than meets the eye.** Beyond the panels above, `sensors.<id>.derived` carries a stack of
+> computed values — wet-bulb, VPD, mixing/specific humidity, humidex, frost point, air density,
+> density/pressure altitude, cloud base — plus a `derived.sky` sub-block (estimated irradiance,
+> cloud cover, UV index, sky condition). The **Derived Thermodynamics** and **Today & Trends**
+> dashboard panels surface these. The full field list is in the OpenAPI explorer (`/docs`) and
+> [`docs/design/02-api-design.md`](design/02-api-design.md).
 
 A few useful one-liners:
 

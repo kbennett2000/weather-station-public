@@ -26,13 +26,15 @@ Items closed by this decision: **BUG-09, BUG-10, BUG-11, BUG-17, DOC-01**.
 **2026-05-22 — Adopt unified server-side API (see `weather-station-api-design.md`).** All derived weather/astronomy values move to a single read-only HTTP API on the server. Dashboard and tray become thin consumers. The proxy SSRF mechanism is removed.
 
 **2026-05-22 — Storage & data scope:**
-- Storage engine: **SQLite, WAL mode** (replaces MariaDB). See `weather-station-schema.md`.
+- Storage engine: **SQLite, WAL mode** (replaces MariaDB). See `server/weather_server/db.py`.
 - Migration: **greenfield, no import** from existing tables.
 - Logged data: **outdoor sensor only**. Indoor and basement sensors remain live-only (current readings via API poll, no history retained).
 
 This reclassifies **BUG-12** from a defect to an intentional design choice — the basement (and indoor) sensors are live-only by design rather than incompletely implemented. The associated README inaccuracy still needs to be fixed; tracking that under the BUG-12 entry going forward.
 
-**2026-05-22 — Server process model.** Single FastAPI process with two internal async tasks: a background outdoor-logging loop and on-demand polling of indoor/basement sensors from request handlers (with a short TTL cache to deduplicate concurrent fetches). One systemd unit, one log file. See `weather-station-server-architecture.md` for rationale.
+**2026-05-22 — Server process model.** Single FastAPI process with two internal async tasks: a background outdoor-logging loop and on-demand polling of indoor/basement sensors from request handlers (with a short TTL cache to deduplicate concurrent fetches). One systemd unit, one log file. See `server/weather_server/main.py` for the implementation.
+
+> **Update (post-external-feed):** the model now has **three** concurrency mechanisms — the outdoor logger task, the **optional** external-feed background task (spawned but exits immediately when `[external]` is disabled), and the on-demand indoor/basement polling. See ADR-0001.
 
 **2026-05-22 — Dashboard and widget scope.** See `weather-station-clients-scope.md`. Key points:
 - Dashboard moves to a configurable port, default **8005**. The iptables 80→8000 redirect is removed; port 80 is freed for a future menu/landing service.

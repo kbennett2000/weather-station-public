@@ -31,7 +31,7 @@ The following are settled. If you believe one is wrong, **surface it as a questi
 - **Pressure handling:** stored as `pressure_pa` (raw station pressure in Pa). API exposes four distinct fields — `pressure_station_hpa`, `pressure_station_inhg`, `pressure_sealevel_hpa`, `pressure_sealevel_inhg` — to prevent the ambiguity bug documented in the findings (BUG-21).
 - **Timezone:** resolved dynamically via `timezonefinder` from outdoor GPS coordinates. No internet required.
 - **Dashboard port:** default 8005, configurable. No iptables redirect from port 80.
-- **Process model:** single FastAPI process. Two internal async tasks: outdoor logger loop + on-demand polling of indoor/basement with a 5s TTL cache.
+- **Process model:** single FastAPI process. Three concurrency mechanisms: the outdoor logger background task, the **optional** external-feed background task (spawned but exits immediately when `[external]` is disabled), and on-demand polling of indoor/basement in request handlers with a 5s TTL cache.
 - **Visual aesthetic:** instrument-panel. Saira Stencil One for title, JetBrains Mono for readouts, IBM Plex Sans Condensed for labels. Warm amber on near-black. The running dashboard at [`dashboard/`](dashboard/) is the visual reference now — match the existing style.
 - **Branding slots:** every place marked `[BRANDING]` in the mockup is a *placeholder* for the human to fill in with project-specific references. **Do not invent content for these slots.** Leave them visibly empty until the human supplies the text.
 
@@ -53,10 +53,16 @@ weather-station-public/
 ├── CLAUDE.md                    # This file
 ├── README.md                    # User-facing project README (rewritten in phase 6)
 ├── docs/
-│   ├── design/                  # Read-only design inputs
+│   ├── 01-building-the-sensors.md
+│   ├── 02-install-and-configure.md
+│   ├── 03-using-the-dashboard.md
+│   ├── design/                  # Design inputs (see note below)
 │   │   ├── README.md
 │   │   ├── 01-findings.md
 │   │   └── 02-api-design.md
+│   ├── adr/                     # Architecture Decision Records
+│   │   └── 0001-optional-internet-external-data-feed.md
+│   ├── images/
 │   ├── phase2-verification.md   # On-hardware verification checklists
 │   └── phase5-verification.md
 ├── server/
@@ -68,16 +74,31 @@ weather-station-public/
 │   │   ├── cache.py
 │   │   ├── logger_task.py
 │   │   ├── sensors.py
+│   │   ├── wire_format.py       # ESP32 /data → SensorPayload adapter
+│   │   ├── _payload_keys.py     # internal field-name constants
+│   │   ├── responses.py         # build_* response composers
+│   │   ├── branding.py          # branding.toml loader
 │   │   ├── schemas.py
+│   │   ├── external/            # OPTIONAL internet feed (EXTERNAL provenance)
+│   │   │   ├── __init__.py
+│   │   │   ├── providers.py     # open-meteo / nws / wunderground
+│   │   │   ├── store.py
+│   │   │   └── task.py
 │   │   ├── derivations/
-│   │   │   ├── readings.py
+│   │   │   ├── readings.py      # incl. extended thermodynamics
 │   │   │   ├── location.py
+│   │   │   ├── light.py         # derived.sky estimates
+│   │   │   ├── fused.py         # wind chill / apparent temp / THSW / ET0
+│   │   │   ├── summary.py       # history aggregations (D-HISTORY)
 │   │   │   └── astronomy.py
 │   │   └── routes/
 │   │       ├── current.py
 │   │       ├── history.py
+│   │       ├── summary.py
 │   │       ├── sensors.py
 │   │       ├── astronomy.py
+│   │       ├── external.py
+│   │       ├── branding.py
 │   │       └── health.py
 │   ├── tests/
 │   ├── pyproject.toml
@@ -168,6 +189,26 @@ Rewrite `installScriptUbuntu.sh` as `install.sh`. Install the new stack (FastAPI
   - Phase 5 — ESP32 sketch cleanup (drop inline HTML, drop /setOffset, BUG-08 fixed at source, sketches renamed to `outdoor.ino` / `indoor.ino` / `basement.ino`)
   - Phase 6 — `install.sh`, systemd unit, README rewrite, legacy files removed
 - Legacy code removed: `weatherProxy.py`, `weatherLogger_*.py`, `dashboard.html`, `weatherAnalysis.js`, `weather_tray.py` (root), `installScriptUbuntu.sh`, `js/`, the two non-FreeRTOS sketches, and the three outdated setup guides (`docs/rpiSetup.md`, `docs/ubuntuServerSetup.md`, `docs/howToUseWeatherTray_Ubuntu.md` — all superseded by `install.sh` + `README.md`).
+
+**Post-rebuild additions** (after the six phases; not phase-numbered):
+
+- **Optional internet feed** (offline-first; off by default in code, opt-in via `[external]`):
+  `external/` package (open-meteo default, nws, wunderground), background fetch task, an
+  `external` block on `/api/v1/current` + standalone `GET /api/v1/external`. Wind + regional
+  conditions + fused comfort/agronomy indices (wind chill, apparent temp, THSW, ET₀).
+  New provenance tag **`EXTERNAL`**. See `docs/adr/0001-optional-internet-external-data-feed.md`.
+- **Extended `derived` block**: wet-bulb, VPD, mixing/specific humidity, humidex, frost point,
+  vapor pressures, air density, density/pressure altitude, cloud base; plus a `derived.sky`
+  sub-block (irradiance, cloud %, UV estimate, sky condition — all flagged `estimated`).
+- **History summary endpoint** `GET /api/v1/summary/{sensor_id}` (outdoor only): hi/lo/avg,
+  pressure tendency, degree days, DLI, Hargreaves ET₀, trends. New provenance tag **`D-HISTORY`**.
+- **Extended astronomy**: twilight bands, golden/blue hour, season + next solstice/equinox,
+  day-length change, sunrise/sunset azimuth, shadow multiplier, next new/full moon.
+- **History `from`/`to`** window params implemented on `/api/v1/history/{sensor_id}`.
+- **Dashboard** updated to surface all of the above (Regional / Thermo / Today panels, wind
+  compass, adaptive feels-like); static files now served with `Cache-Control: no-cache`.
+- The two new provenance tags (`EXTERNAL`, `D-HISTORY`) and the new endpoints/fields were
+  synced into `docs/design/02-api-design.md`.
 
 The rebuild is done. Future work is regular maintenance, not phase-numbered delivery.
 

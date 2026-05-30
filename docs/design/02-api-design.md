@@ -1,6 +1,6 @@
 # Weather Station API — Proposed Surface
 
-Status: draft for review
+Status: implemented (amended 2026-05-30 to add the optional external feed, the summary endpoint, and the extended derived/astronomy fields — see the **Post-launch additions** sections marked below)
 Date: 2026-05-22
 Scope: HTTP API exposed by the (renamed) weather server to all consumers — dashboard, tray, and anything else that wants to consume weather data.
 
@@ -20,7 +20,7 @@ Scope: HTTP API exposed by the (renamed) weather server to all consumers — das
 
 ## Field provenance taxonomy
 
-Every field returned by the API falls into one of these six categories. The categorization is documented per-field in the schema tables below.
+Every field returned by the API falls into one of these eight categories. The categorization is documented per-field in the schema tables below.
 
 | Tag | Meaning | Stale after |
 |---|---|---|
@@ -30,6 +30,8 @@ Every field returned by the API falls into one of these six categories. The cate
 | `D-LOCATION` | Derived from GPS coords (Maidenhead grid, DMS, altitude in ft) | When GPS changes (essentially never for a fixed station) |
 | `D-TIME` | Derived from current clock time + location (sun position, time to sunset, moon phase) | Within seconds — must be computed fresh on every request |
 | `META` | Server-generated bookkeeping (timestamps, IDs, freshness, online flag) | N/A |
+| `EXTERNAL` *(post-launch)* | Internet-sourced regional data (wind, cloud, etc.) and anything fused from it (wind chill, ET₀). **OPTIONAL** — absent/`null` when the feed is disabled or offline | `refresh_interval_seconds` (default 300s); carries `age_seconds`/`stale` |
+| `D-HISTORY` *(post-launch)* | Derived by aggregating the logged time series (today hi/lo, pressure tendency, degree days, DLI) | When the window advances / a new reading is logged |
 
 The important distinction is `D-READING` vs `D-TIME`. Reading-bound derivations are snapshots: the dew point at 3:00 PM yesterday is fixed forever. Time-bound derivations are functions of *now*: "time to sunset" computed at sensor poll time is wrong 60 seconds later. The server treats them differently — reading-bound values can be computed once and cached; time-bound values are recomputed on every request.
 
@@ -39,11 +41,14 @@ The important distinction is `D-READING` vs `D-TIME`. Reading-bound derivations 
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/v1/current` | Latest reading from every sensor + astronomy block |
-| `GET` | `/api/v1/current/{sensor_id}` | Latest reading from one sensor + astronomy block |
+| `GET` | `/api/v1/current` | Latest reading from every sensor + astronomy block + optional `external` block |
+| `GET` | `/api/v1/current/{sensor_id}` | Latest reading from one sensor + astronomy block + optional `external` block |
 | `GET` | `/api/v1/history/{sensor_id}` | Time-bucketed history for one sensor |
+| `GET` | `/api/v1/summary/{sensor_id}` *(post-launch)* | Windowed history summary (hi/lo/avg, tendency, degree days, DLI, ET₀); outdoor only |
+| `GET` | `/api/v1/external` *(post-launch)* | The optional internet-sourced regional block alone (wind + conditions + fused indices) |
 | `GET` | `/api/v1/sensors` | List of registered sensors with status |
 | `GET` | `/api/v1/astronomy` | Astronomy block alone (no sensor data) |
+| `GET` | `/api/v1/branding` *(post-launch)* | Parsed `branding.toml` used by the dashboard |
 | `GET` | `/api/v1/health` | Health of server, DB, loggers, sensors |
 
 All responses are `application/json`. All timestamps are ISO 8601 with timezone. Server time is UTC; user-facing times (sunrise, moonrise, local_time) are in the timezone derived from the outdoor sensor's GPS coordinates.
@@ -143,6 +148,24 @@ Used in `/api/v1/current`, `/api/v1/current/{sensor_id}`, and as the building bl
 
 **Optional blocks.** `location` is absent for sensors without GPS (indoor, basement). `device` and `calibration` blocks are present for all sensors but can be empty objects if the sensor doesn't report telemetry.
 
+#### Post-launch additions to `derived` (all `D-READING`)
+
+The `derived` block grew well beyond the original nine fields. Source of truth is
+`DerivedReading` in `server/weather_server/schemas.py`. Added fields:
+
+- **Comfort:** `feels_like_c` / `feels_like_f` (NWS heat index, warm side only — wind chill lives
+  in the `external` block).
+- **Thermodynamics:** `wet_bulb_c/f`, `humidex_c/f`, `frost_point_c/f`,
+  `saturation_vapor_pressure_hpa`, `vapor_pressure_hpa`, `vapor_pressure_deficit_kpa`,
+  `mixing_ratio_g_kg`, `specific_humidity_g_kg`, `air_density_kg_m3`,
+  `pressure_altitude_m/ft`, `density_altitude_m/ft`, `cloud_base_m/ft`.
+- **`derived.sky` sub-block** (light sensor + sun altitude; ESTIMATES — carries `estimated: true`):
+  `sun_altitude_deg`, `solar_irradiance_w_m2`, `cloud_cover_pct`, `uv_index_estimate`,
+  `sky_condition`. Present only on light-equipped sensors with GPS; `cloud_cover_pct`/`uv` are
+  `null` when the sun is too low to be reliable.
+
+All cascade to `null` when their inputs are missing (same contract as `pressure_sealevel_*`).
+
 ---
 
 ### `Astronomy`
@@ -213,6 +236,14 @@ Used in `/api/v1/current`, `/api/v1/current/{sensor_id}`, and `/api/v1/astronomy
 
 **Reference location.** By default, astronomy is computed at the outdoor sensor's most recent GPS coordinates. If the outdoor sensor has no fix yet, the server falls back to a configured default lat/lon. The `reference_location.source` field tells the consumer which path was taken. Callers of `/api/v1/astronomy` can override via `?lat=...&lon=...` if needed.
 
+#### Post-launch additions to `Astronomy` (all `D-TIME`/`D-LOCATION`)
+
+- **`sun`:** `nautical_dawn/dusk` (−12°), `astronomical_dawn/dusk` (−18°),
+  `golden_hour_dawn/dusk` (+6°), `blue_hour_dawn/dusk` (−4°), `sunrise_azimuth_deg`,
+  `sunset_azimuth_deg`, `shadow_multiplier`, `day_length_change_seconds` (vs. yesterday),
+  `season`, `next_solar_event`, `next_solar_event_time`, `seconds_to_next_solar_event`.
+- **`moon`:** `next_new_moon`, `next_full_moon`.
+
 ---
 
 ## Endpoint specifications
@@ -233,7 +264,8 @@ Latest reading from every registered sensor, plus a single astronomy block.
     "indoor":  { /* SensorReading */ },
     "basement": { /* SensorReading */ }
   },
-  "astronomy": { /* Astronomy */ }
+  "astronomy": { /* Astronomy */ },
+  "external": { /* ExternalBlock | null — post-launch; null when the feed is off/offline */ }
 }
 ```
 
@@ -256,7 +288,8 @@ Latest reading from one named sensor, plus the astronomy block.
 {
   "server_time": "2026-05-22T15:30:28Z",
   "sensor": { /* SensorReading */ },
-  "astronomy": { /* Astronomy */ }
+  "astronomy": { /* Astronomy */ },
+  "external": { /* ExternalBlock | null — post-launch; null when the feed is off/offline */ }
 }
 ```
 
@@ -270,7 +303,7 @@ Latest reading from one named sensor, plus the astronomy block.
 
 Time-bucketed history for one sensor.
 
-Only `outdoor` is currently logged (see `weather-station-schema.md`). Calls with any other `sensor_id` return `404` with `code: "history_not_available"`.
+Only `outdoor` is currently logged (see `server/weather_server/db.py`). Calls with any other `sensor_id` return `404` with `code: "history_not_available"`.
 
 **Path parameters:**
 - `sensor_id` — must be `outdoor`.
@@ -294,6 +327,15 @@ Only `outdoor` is currently logged (see `weather-station-schema.md`). Calls with
 | ≤ 24h | `300` (5 min) |
 | ≤ 7d | `1800` (30 min) |
 | > 7d | `3600` (1 hour) |
+
+> **Note:** the explicit `bucket` enum and the `auto` heuristic aren't identical. `900` (15 min)
+> is accepted only as an explicit `?bucket=900` — `auto` never selects it. Conversely the 30-min
+> bucket `auto` picks for the ≤7d band is internal: it appears in the response `bucket_seconds`
+> but isn't an explicitly requestable enum value.
+
+**Window selection:** pass either `?hours=` (default 24) **or** an explicit `?from=&to=`
+(ISO 8601; `to` defaults to now). When `from`/`to` are supplied they define the window and the
+`bucket=auto` heuristic uses that span.
 
 **Response 200:**
 
@@ -406,6 +448,59 @@ Returns just the astronomy block. Useful for consumers that want sun/moon data w
 
 ---
 
+### `GET /api/v1/external` *(post-launch)*
+
+The optional internet-sourced regional block alone (the same object embedded in `/current`).
+
+**Query parameters:** none.
+
+**Response 200:** `{ "server_time": ..., "external": ExternalBlock | null }` — `external` is `null`
+when the feed is disabled or no successful fetch has occurred (offline-first).
+
+#### `ExternalBlock` (provenance `EXTERNAL`)
+
+All fields optional. Wind is stored internally in m/s and exposed in every unit. Source of truth:
+`ExternalBlock` in `server/weather_server/schemas.py`.
+
+| Field | Notes |
+|---|---|
+| `provider` / `source` / `station_id` / `distance_km` | provenance: `open-meteo`/`nws`/`wunderground`; human label (e.g. `nws:KBJC`); station + distance for station providers |
+| `observed_at` / `fetched_at` / `age_seconds` / `stale` / `confidence` | freshness; `stale` once age exceeds ~3× refresh; `confidence` = `low` when the optional NWS cross-check diverges |
+| `wind_speed_ms` / `_kmh` / `_mph` / `_kt` | wind speed in four units |
+| `wind_gust_ms` / `_kmh` / `_mph` | gust |
+| `wind_direction_deg` / `wind_direction_cardinal` | bearing + 16-point compass label |
+| `cloud_cover_pct` / `uv_index` / `precip_mm` / `visibility_m` / `visibility_km` | regional conditions (model/station) |
+| `wind_chill_c/f` / `apparent_temperature_c/f` | fused: NWS wind chill + BOM full-range apparent temp (local temp/humidity + external wind) |
+| `beaufort_force` / `beaufort_description` | Beaufort scale |
+| `thsw_index_c/f` | temp-humidity-sun-wind index (uses `derived.sky` irradiance); estimate |
+| `et0_mm_hour` | reference evapotranspiration, FAO-56 hourly Penman-Monteith |
+
+---
+
+### `GET /api/v1/summary/{sensor_id}` *(post-launch)*
+
+Windowed history summary derived from the logged time series (provenance `D-HISTORY`). **Outdoor
+only** — other sensors return `404` `history_not_available`, unknown ids `404` `sensor_not_found`.
+
+**Query parameters:** `period` ∈ `today` (default) | `24h` | `7d` | `30d`.
+
+**Response 200** (`SummaryResponse`): `sensor_id`, `period`, `from`/`to`, `timezone`, `sample_count`,
+plus — `temperature_c`/`temperature_f`/`humidity_pct`/`pressure_station_hpa`/`pressure_sealevel_hpa`
+each as a `{min,max,avg}` block; `dewpoint_avg_c`; `diurnal_range_c`; `pressure_tendency_hpa_3h` +
+`pressure_trend` (`rising`/`falling`/`steady` — observed, **not** a forecast);
+`temperature_trend_c_per_hour`; `heating_degree_days_f` / `cooling_degree_days_f` /
+`growing_degree_days_f` (accumulated, US bases); `light_integral_mol_m2` (DLI);
+`hargreaves_et0_mm` (temperature-only reference ET₀ — wind isn't logged).
+
+---
+
+### `GET /api/v1/branding` *(post-launch)*
+
+Returns the parsed `branding.toml` (header/footer/taglines/state copy) the dashboard renders. No
+parameters.
+
+---
+
 ### `GET /api/v1/health`
 
 System self-check. Used by uptime monitors and by the dashboard's "all systems normal" indicator.
@@ -513,6 +608,8 @@ A representative config file:
 host = "0.0.0.0"
 port = 8005
 db_path = "weather.db"
+dashboard_dir = "../dashboard"      # post-launch; static dashboard served at /dashboard/
+branding_path = "../branding.toml"  # post-launch; parsed for /api/v1/branding
 
 [logger]
 interval_seconds = 60
@@ -520,6 +617,17 @@ http_timeout_seconds = 10
 
 [cache]
 ttl_seconds = 5
+
+# Post-launch: optional internet feed. OFF by default (absent section / enabled=false);
+# when off the server is LAN-only and the `external` block is null.
+[external]
+enabled = true
+provider = "open-meteo"             # open-meteo | nws | wunderground
+refresh_interval_seconds = 300
+http_timeout_seconds = 8
+fetch = ["wind", "cloud", "uv", "precip", "visibility"]
+cross_check = false
+# station_id / api_key (wunderground), lat_override / lon_override — all optional
 
 [[sensors]]
 id = "outdoor"
@@ -583,11 +691,11 @@ If the outdoor sensor has no GPS fix and there's no cached previous fix, the ser
 
 ### Process model
 
-Settled in `weather-station-server-architecture.md`: single FastAPI process, outdoor logging runs as a background asyncio task within it, indoor and basement sensors are polled on-demand by request handlers (with a 5-second TTL cache to deduplicate concurrent fetches). One systemd unit, one log file. The choice is reversible if real-world latency patterns warrant moving indoor/basement polling to a background task; the API contract is unaffected.
+Settled in `server/weather_server/main.py`: single FastAPI process, outdoor logging runs as a background asyncio task within it, indoor and basement sensors are polled on-demand by request handlers (with a 5-second TTL cache to deduplicate concurrent fetches). One systemd unit, one log file. The choice is reversible if real-world latency patterns warrant moving indoor/basement polling to a background task; the API contract is unaffected.
 
 ### Database schema
 
-Settled in `weather-station-schema.md`. Key points that affect the API:
+Settled in `server/weather_server/db.py`. Key points that affect the API:
 
 - **Storage engine:** SQLite, WAL mode, single file. Replaces MariaDB.
 - **Greenfield:** no migration from existing tables.

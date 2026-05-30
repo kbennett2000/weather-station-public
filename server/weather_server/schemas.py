@@ -12,7 +12,8 @@ Field provenance taxonomy from the API design doc:
 - D-TIME        — derived from clock + location
 - META          — server bookkeeping
 
-Two tags extend the original taxonomy (flagged for docs/design/02-api-design.md):
+Two tags extend the original taxonomy (documented in docs/design/02-api-design.md;
+rationale in docs/adr/0001-optional-internet-external-data-feed.md):
 - EXTERNAL      — internet-sourced regional data (wind etc.) and anything
                   fused from it; OPTIONAL — absent/null when offline
 - D-HISTORY     — derived from the logged time series (see SummaryResponse)

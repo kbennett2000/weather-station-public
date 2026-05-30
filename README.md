@@ -5,7 +5,7 @@ Tired of stickin’ your head out the damn window like a fool every time you wan
 Well come on down to **Jones’ Big Ass Home Weather Station™** — the cheapest, drunkest, most motivated DIY networked weather station you’ll ever own!
 
 ESP32 sensors → a Linux box on your LAN → a beautiful browser dashboard + a little Linux system-tray widget.  
-**Nothing leaves your LAN.** No cloud, no accounts, no auth, no fancy forecasting bullshit. Just good ass weather data, right where you live.
+**Nothing leaves your LAN unless *you* say so.** No cloud, no accounts, no auth, no fancy forecasting bullshit. Just good ass weather data, right where you live. (There's an **optional** internet feed that'll pull wind + regional conditions from a free, keyless weather service if you flip it on in `weather.toml` — totally opt-in, and the whole rig keeps working fine with the internet unplugged.)
 
 ![Dashboard](docs/images/01-dashboard-full.png)  
 *(Look at that pretty amber glow — I built it from parts in the yard with duct tape and hope, I swear!)*
@@ -53,7 +53,7 @@ If anything else is unclear, [`02-install-and-configure.md`](docs/02-install-and
 ```bash
 make install     # one-time: create venv, pip install -e ./server[dev]
 make dev         # uvicorn --reload on port 8005
-make test        # pytest (118 tests, ~6s)
+make test        # pytest (267 tests, ~8s)
 make check       # lint + typecheck + test
 make help        # everything else
 ```

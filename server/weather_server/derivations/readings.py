@@ -70,8 +70,11 @@ def heat_index_f(temp_f: float, humidity_pct: float) -> float:
     Uses the simple-formula gate from NWS guidance: only escalate to the
     full Rothfusz regression once the simple value averaged with the air
     temperature reaches 80°F. Below that gate, or for non-physical
-    humidity, returns the air temperature unchanged. Wind chill (cold
-    side) is not computed — no anemometer on the outdoor sensor.
+    humidity, returns the air temperature unchanged.
+
+    Wind chill (cold side) is not included in this `derived.feels_like`
+    value — there's no local anemometer. When the optional internet feed is
+    enabled it IS available as `external.wind_chill_c/f` (see derivations/fused.py).
     """
     if humidity_pct <= 0 or humidity_pct > 100:
         return temp_f

@@ -133,6 +133,41 @@ The example file ships with this section **enabled**, which makes the server rea
 
 **For production, comment out the whole `[development]` block.** That's the switch that flips the server from fixture mode to real HTTP polling. Restart the service afterwards.
 
+### `[external]` — optional internet feed (off by default)
+
+Your sensors can't measure wind locally, so there's an **optional** feature that pulls wind +
+regional conditions (cloud, UV, precipitation, visibility) from a free internet weather service
+and uses them to compute extra "feels like" numbers (wind chill, apparent temperature, THSW) and
+reference evapotranspiration (ET₀). This is the **only** part of the server that ever touches the
+internet.
+
+```toml
+[external]
+enabled = true
+provider = "open-meteo"        # open-meteo | nws | wunderground
+refresh_interval_seconds = 300
+http_timeout_seconds = 8
+fetch = ["wind", "cloud", "uv", "precip", "visibility"]
+cross_check = false
+# station_id = "KCOELIZA85"    # nws (pin a station) or wunderground (required)
+# api_key = "..."             # wunderground only (free member key)
+# lat_override = 0.0          # default: outdoor GPS, then its fallback_lat/lon
+# lon_override = 0.0
+```
+
+- **Offline-first.** If you remove this section, set `enabled = false`, or simply have no
+  internet, the server behaves exactly as a LAN-only deployment — no errors, no delay. The wind
+  data just shows up as `null` and the dashboard's "Regional" panel reads "NO FEED."
+- **Providers.** `open-meteo` (the default) is keyless, global, and needs no account — it's a
+  best-match weather model for your exact coordinates. `nws` uses the nearest official US
+  station. `wunderground` reads a specific personal weather station and needs a free
+  `station_id` + `api_key`.
+- **Heads-up:** `weather.toml.example` ships with `[external] enabled = true` so the demo shows
+  wind out of the box. If you'd rather keep everything strictly on your LAN, set `enabled = false`
+  (or delete the section). The fetch sends your station's coordinates to the chosen provider.
+
+The design rationale (provider trade-offs, the offline invariant) is in [`adr/0001-optional-internet-external-data-feed.md`](adr/0001-optional-internet-external-data-feed.md).
+
 ### `[[sensors]]` blocks
 
 One block per physical sensor. Example:
