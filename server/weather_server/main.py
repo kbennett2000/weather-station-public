@@ -15,9 +15,10 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
@@ -133,6 +134,22 @@ def create_app() -> FastAPI:
     return app
 
 
+class _NoCacheStaticFiles(StaticFiles):
+    """Serve dashboard assets with ``Cache-Control: no-cache``.
+
+    Plain StaticFiles emits only ETag/Last-Modified (no Cache-Control), which
+    lets browsers heuristically cache app.js/style.css and run a stale build
+    after a deploy. ``no-cache`` forces revalidation on every load — cheap on a
+    LAN, where the existing ETag yields a 304 when nothing changed — so the
+    dashboard can never execute an outdated script.
+    """
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        response: Response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def _mount_dashboard(app: FastAPI) -> None:
     """Mount the dashboard static files at /dashboard/.
 
@@ -157,7 +174,7 @@ def _mount_dashboard(app: FastAPI) -> None:
 
     app.mount(
         "/dashboard",
-        StaticFiles(directory=str(dashboard_dir), html=True),
+        _NoCacheStaticFiles(directory=str(dashboard_dir), html=True),
         name="dashboard",
     )
     log.info("dashboard mounted at /dashboard/ from %s", dashboard_dir)

@@ -264,6 +264,15 @@ def test_offline_sensor_returns_503_when_never_seen(
         assert r.json()["error"]["code"] == "sensor_no_data"
 
 
+def test_dashboard_assets_served_no_cache(client: TestClient) -> None:
+    """Dashboard static files must revalidate so a deploy never leaves the
+    browser running a stale app.js (regression guard for the cache bug)."""
+    for path in ("/dashboard/app.js", "/dashboard/index.html"):
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert r.headers.get("cache-control") == "no-cache", path
+
+
 def test_openapi_docs_render(client: TestClient) -> None:
     r = client.get("/docs")
     assert r.status_code == 200
