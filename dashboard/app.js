@@ -8,6 +8,7 @@
 const API_BASE = '';                       // same-origin
 const CURRENT_REFRESH_MS = 30_000;         // /current poll cadence
 const HISTORY_REFRESH_MS = 60_000;         // /history poll cadence
+const SUMMARY_REFRESH_MS = 60_000;         // /summary poll cadence
 
 const TEXT_DIM  = '#7b8696';
 const HAIRLINE  = '#232e3c';
@@ -29,6 +30,7 @@ let currentWindowHours = (() => {
   const fromUrl = parseInt(new URLSearchParams(window.location.search).get('hours'), 10);
   return allowed.has(fromUrl) ? fromUrl : 24;
 })();
+let currentSummaryPeriod = 'today';
 let charts = {};
 
 // ─────────────────────────────────────────────────────────────────
@@ -78,6 +80,12 @@ function fmtDuration(seconds) {
 function fmtHours(seconds) {
   if (seconds === null || seconds === undefined) return '--';
   return (seconds / 3600).toFixed(1);
+}
+
+function fmtSigned(n, decimals = 1) {
+  if (n === null || n === undefined || Number.isNaN(n)) return '--';
+  const v = Number(n);
+  return (v >= 0 ? '+' : '') + v.toFixed(decimals);
 }
 
 function fmtKB(bytes) {
@@ -229,6 +237,18 @@ function renderDayArc(sun, serverTimeIso) {
   if (sunriseX !== null && sunsetX !== null) {
     svg += `<rect x="${sunriseX}" y="33" width="${sunsetX - sunriseX}" height="4" rx="2" fill="url(#dayGrad)" opacity="0.85"/>`;
   }
+
+  // Twilight bands + photography windows — faint ticks (no labels, to avoid
+  // crowding the dawn/dusk/sunrise/sunset/noon markers drawn on top).
+  const tick = (iso, color) => {
+    if (!iso) return '';
+    const tx = x(iso);
+    return `<line x1="${tx}" y1="30" x2="${tx}" y2="40" stroke="${color}" stroke-width="1"/>`;
+  };
+  svg += tick(sun.astronomical_dawn, '#2f3b56') + tick(sun.astronomical_dusk, '#2f3b56');
+  svg += tick(sun.nautical_dawn, '#3c4f72') + tick(sun.nautical_dusk, '#3c4f72');
+  svg += tick(sun.blue_hour_dawn, '#58c4d4') + tick(sun.blue_hour_dusk, '#58c4d4');
+  svg += tick(sun.golden_hour_dawn, '#ffd57a') + tick(sun.golden_hour_dusk, '#ffd57a');
 
   if (dawnX !== null) {
     svg += `
@@ -383,6 +403,10 @@ async function refreshCurrent() {
   applyIndoor(sensors.indoor);
   applyBasement(sensors.basement);
   applyAstronomy(data.astronomy, data.server_time);
+  applyRegional(data.external);
+  applyFeelsLike(sensors.outdoor, data.external);
+  applyThermo(sensors.outdoor);
+  applySky(sensors.outdoor);
 }
 
 function applyOutdoor(sr) {
@@ -403,7 +427,7 @@ function applyOutdoor(sr) {
 
   setText('out-temp-f', fmt(d.temperature_f, 1));
   setText('out-temp-c', fmt(d.temperature_c, 1));
-  setText('out-feels-f', fmt(d.feels_like_f, 1));
+  // feels-like handled by applyFeelsLike (adaptive: apparent temp when online)
   setText('out-hum', fmt(raw.humidity_pct, 1));
   setText('out-abshum', fmt(d.absolute_humidity_g_m3, 1));
   setText('out-dew-f', fmt(d.dewpoint_f, 1));
@@ -522,6 +546,16 @@ function applyAstronomy(a, serverTimeIso) {
       setText('astro-countdown', '--');
     }
     setText('astro-sunpos', `Az ${fmt(a.sun.azimuth_deg, 0)}° · Alt ${fmt(a.sun.altitude_deg, 1)}°`);
+
+    setText('astro-season', a.sun.season ?? '--');
+    setText('astro-nextevent', eventLabel(a.sun.next_solar_event));
+    setText('astro-nextevent-label', `Next Event · ${countdownDays(a.sun.seconds_to_next_solar_event)}`);
+    setText('astro-daylendelta', a.sun.day_length_change_seconds !== null && a.sun.day_length_change_seconds !== undefined
+      ? `${fmtSigned(a.sun.day_length_change_seconds, 0)} s` : '--');
+    const sunriseAz = a.sun.sunrise_azimuth_deg !== null && a.sun.sunrise_azimuth_deg !== undefined ? `${fmt(a.sun.sunrise_azimuth_deg, 0)}°` : '--';
+    const sunsetAz = a.sun.sunset_azimuth_deg !== null && a.sun.sunset_azimuth_deg !== undefined ? `${fmt(a.sun.sunset_azimuth_deg, 0)}°` : '--';
+    const shadow = a.sun.shadow_multiplier !== null && a.sun.shadow_multiplier !== undefined ? `${fmt(a.sun.shadow_multiplier, 1)}×` : '—';
+    setText('sun-extra', `SUNRISE AZ ${sunriseAz} · SUNSET AZ ${sunsetAz} · SHADOW ${shadow}`);
   }
 
   if (a.moon) {
@@ -535,7 +569,156 @@ function applyAstronomy(a, serverTimeIso) {
     const az = a.moon.azimuth_deg !== null ? `AZ ${fmt(a.moon.azimuth_deg, 0)}°` : 'AZ --';
     const alt = a.moon.altitude_deg !== null ? `ALT ${fmt(a.moon.altitude_deg, 1)}°` : 'ALT --';
     setText('moon-meta', `${rise} · ${set} · ${dist} · ${az} · ${alt}`);
+    setText('moon-next', `NEW ${fmtDate(a.moon.next_new_moon)} · FULL ${fmtDate(a.moon.next_full_moon)}`);
   }
+}
+
+function eventLabel(key) {
+  return ({
+    march_equinox: 'March Equinox',
+    june_solstice: 'June Solstice',
+    september_equinox: 'Sept Equinox',
+    december_solstice: 'Dec Solstice',
+  })[key] || (key ?? '--');
+}
+
+function countdownDays(seconds) {
+  if (seconds === null || seconds === undefined) return '';
+  const days = Math.round(seconds / 86_400);
+  return `${days}d`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '--';
+  return new Date(iso).toLocaleDateString('en-US', {
+    day: '2-digit', month: 'short', timeZone: timezone,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Regional (internet-sourced) — the `external` block. Treated exactly
+// like a sensor that can be unplugged: present → LED on (or warn if
+// stale), null → dimmed panel + NO FEED, mirroring the basement panel.
+// ─────────────────────────────────────────────────────────────────
+
+const REGIONAL_VALUE_IDS = [
+  'reg-wind-mph', 'reg-wind-dir', 'reg-wind-kmh', 'reg-gust-mph', 'reg-beaufort',
+  'reg-beaufort-desc', 'reg-apparent-f', 'reg-windchill-f', 'reg-thsw-f',
+  'reg-cloud', 'reg-uv', 'reg-vis', 'reg-precip', 'reg-et0',
+];
+
+function regionalSourceLabel(ext) {
+  if (ext.provider === 'open-meteo') return 'Open-Meteo';
+  if (ext.station_id) return ext.station_id;
+  return ext.provider || 'feed';
+}
+
+function applyRegional(ext) {
+  const panel = $('panel-regional');
+  const offlineTag = $('regional-offline-tag');
+  const conf = $('regional-confidence');
+  const present = !!ext;
+
+  const led = present ? (ext.stale ? 'warn' : 'on') : 'off';
+  setLed('led-net', led);
+  setLed('led-regional-head', led);
+
+  if (!present) {
+    panel.classList.add('offline');
+    offlineTag.style.display = 'inline-flex';
+    conf.style.display = 'none';
+    setText('regional-headsub', 'no feed');
+    renderWindCompass(null);
+    REGIONAL_VALUE_IDS.forEach(id => setText(id, '--'));
+    return;
+  }
+
+  panel.classList.remove('offline');
+  offlineTag.style.display = 'none';
+  conf.style.display = ext.confidence === 'low' ? 'inline-flex' : 'none';
+
+  const dist = (ext.distance_km !== null && ext.distance_km !== undefined)
+    ? ` · ${fmt(ext.distance_km, 0)} km` : '';
+  setText('regional-headsub', `via ${regionalSourceLabel(ext)}${dist} · ${ageLabel(ext.age_seconds)}`);
+
+  renderWindCompass(ext);
+  setText('reg-wind-mph', fmt(ext.wind_speed_mph, 0));
+  setText('reg-wind-dir', ext.wind_direction_cardinal ?? '--');
+  setText('reg-wind-kmh', fmt(ext.wind_speed_kmh, 0));
+  setText('reg-gust-mph', fmt(ext.wind_gust_mph, 0));
+  setText('reg-beaufort', ext.beaufort_force ?? '--');
+  setText('reg-beaufort-desc', ext.beaufort_description ?? '--');
+  setText('reg-apparent-f', fmt(ext.apparent_temperature_f, 0));
+  setText('reg-windchill-f', fmt(ext.wind_chill_f, 0));
+  setText('reg-thsw-f', fmt(ext.thsw_index_f, 0));
+  setText('reg-cloud', fmt(ext.cloud_cover_pct, 0));
+  setText('reg-uv', fmt(ext.uv_index, 1));
+  setText('reg-vis', fmt(ext.visibility_km, 0));
+  setText('reg-precip', fmt(ext.precip_mm, 1));
+  setText('reg-et0', fmt(ext.et0_mm_hour, 3));
+}
+
+function renderWindCompass(ext) {
+  const needle = $('wind-needle');
+  if (!needle) return;
+  setText('wind-compass-speed', ext ? fmt(ext.wind_speed_mph, 0) : '--');
+  setText('wind-compass-card', ext?.wind_direction_cardinal ?? '--');
+  if (!ext || ext.wind_direction_deg === null || ext.wind_direction_deg === undefined) {
+    needle.innerHTML = '';
+    return;
+  }
+  // Arrow sits in the outer ring and points inward from the bearing the wind
+  // blows FROM (meteorological convention). Rotated clockwise: 0°=N at top.
+  needle.innerHTML = `
+    <g transform="rotate(${ext.wind_direction_deg} 80 80)">
+      <line x1="80" y1="22" x2="80" y2="40" stroke="#ffb547" stroke-width="2"/>
+      <polygon points="80,12 73,27 87,27" fill="#ffb547"/>
+    </g>`;
+}
+
+function applyFeelsLike(sr, ext) {
+  // Adaptive: the wind-aware apparent temperature when the feed is online,
+  // else the local heat-index feels-like. A source tag shows which.
+  if (ext && ext.apparent_temperature_f !== null && ext.apparent_temperature_f !== undefined) {
+    setText('out-feels-f', fmt(ext.apparent_temperature_f, 0));
+    setText('out-feels-src', 'apparent');
+    return;
+  }
+  const d = sr?.derived || {};
+  setText('out-feels-f', fmt(d.feels_like_f, 1));
+  setText('out-feels-src', sr ? 'heat index' : '');
+}
+
+function applyThermo(sr) {
+  const d = sr?.derived || {};
+  setText('th-wetbulb-f', fmt(d.wet_bulb_f, 1));
+  setText('th-wetbulb-c', fmt(d.wet_bulb_c, 1));
+  setText('th-humidex-c', fmt(d.humidex_c, 1));
+  setText('th-frost-c', fmt(d.frost_point_c, 1));
+  setText('th-vpd', fmt(d.vapor_pressure_deficit_kpa, 2));
+  setText('th-mixing', fmt(d.mixing_ratio_g_kg, 1));
+  setText('th-specific', fmt(d.specific_humidity_g_kg, 1));
+  setText('th-vp', fmt(d.vapor_pressure_hpa, 1));
+  setText('th-svp', fmt(d.saturation_vapor_pressure_hpa, 1));
+  setText('th-density', fmt(d.air_density_kg_m3, 3));
+  setText('th-densalt', fmtInt(d.density_altitude_ft));
+  setText('th-pressalt', fmtInt(d.pressure_altitude_ft));
+  setText('th-cloudbase', fmtInt(d.cloud_base_ft));
+}
+
+function applySky(sr) {
+  const sky = sr?.derived?.sky;
+  if (!sky) {
+    ['sky-uv', 'sky-cloud', 'sky-irr', 'sky-sunalt'].forEach(id => setText(id, '--'));
+    setText('sky-condition', '--');
+    return;
+  }
+  setText('sky-uv', fmt(sky.uv_index_estimate, 1));
+  setText('sky-cloud', (sky.cloud_cover_pct !== null && sky.cloud_cover_pct !== undefined)
+    ? fmt(sky.cloud_cover_pct, 0) : '--');
+  setText('sky-irr', fmtInt(sky.solar_irradiance_w_m2));
+  setText('sky-sunalt', fmt(sky.sun_altitude_deg, 0));
+  setText('sky-condition', sky.sky_condition ?? '--');
 }
 
 function ageLabel(s) {
@@ -674,19 +857,75 @@ function hpaToInHg(hpa) {
 // ─────────────────────────────────────────────────────────────────
 
 function wireWindowBar() {
-  // Sync the active button with currentWindowHours (which may have been
-  // overridden via ?hours= in the URL).
-  document.querySelectorAll('.window-btn').forEach(b => {
-    const isActive = parseInt(b.dataset.hours, 10) === currentWindowHours;
-    b.classList.toggle('active', isActive);
+  // Scoped to #window-bar so the summary panel's period buttons (which share
+  // the .window-btn class) are not wired to the history window.
+  const btns = document.querySelectorAll('#window-bar .window-btn');
+  btns.forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.hours, 10) === currentWindowHours);
   });
-
-  document.querySelectorAll('.window-btn').forEach(btn => {
+  btns.forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.window-btn').forEach(b => b.classList.remove('active'));
+      btns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentWindowHours = parseInt(btn.dataset.hours, 10);
       refreshHistory();
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// /api/v1/summary/outdoor — today + trends (D-HISTORY)
+// ─────────────────────────────────────────────────────────────────
+
+async function refreshSummary() {
+  let data;
+  try {
+    data = await fetchJson(`/api/v1/summary/outdoor?period=${currentSummaryPeriod}`);
+  } catch (e) {
+    console.warn('summary fetch failed:', e);
+    return;
+  }
+  applySummary(data);
+}
+
+function applySummary(s) {
+  const t = s.temperature_f || {};
+  const h = s.humidity_pct || {};
+  setText('summary-headsub', `${(s.sample_count ?? 0).toLocaleString()} SAMPLES`);
+  setText('sum-temp-hi', fmt(t.max, 0));
+  setText('sum-temp-lo', fmt(t.min, 0));
+  setText('sum-temp-avg', fmt(t.avg, 0));
+  setText('sum-diurnal', fmt(s.diurnal_range_c, 1));
+  setText('sum-hum-lo', fmt(h.min, 0));
+  setText('sum-hum-hi', fmt(h.max, 0));
+  setText('sum-dew', fmt(s.dewpoint_avg_c, 1));
+  setText('sum-temp-trend', fmtSigned(s.temperature_trend_c_per_hour, 2));
+
+  const trend = s.pressure_trend;
+  const arrow = trend === 'rising' ? '↑' : trend === 'falling' ? '↓' : '→';
+  const arrowEl = $('sum-tendency-arrow');
+  if (arrowEl) {
+    arrowEl.textContent = arrow;
+    arrowEl.className = `tendency-arrow ${trend || 'steady'}`;
+  }
+  setText('sum-tendency', trend || '--');
+  setText('sum-tendency-val', fmtSigned(s.pressure_tendency_hpa_3h, 2));
+
+  const dd = [s.heating_degree_days_f, s.cooling_degree_days_f, s.growing_degree_days_f]
+    .map(v => (v === null || v === undefined) ? '--' : Math.round(v)).join(' / ');
+  setText('sum-dd', dd);
+  setText('sum-dli', fmt(s.light_integral_mol_m2, 1));
+  setText('sum-et0', fmt(s.hargreaves_et0_mm, 1));
+}
+
+function wireSummaryWindowBar() {
+  const btns = document.querySelectorAll('#summary-window-bar .window-btn');
+  btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      btns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentSummaryPeriod = btn.dataset.period;
+      refreshSummary();
     });
   });
 }
@@ -698,11 +937,14 @@ function wireWindowBar() {
 function start() {
   initCharts();
   wireWindowBar();
+  wireSummaryWindowBar();
   loadBranding();          // fire-and-forget; static slots populate when it resolves
   refreshCurrent();
   refreshHistory();
+  refreshSummary();
   setInterval(refreshCurrent, CURRENT_REFRESH_MS);
   setInterval(refreshHistory, HISTORY_REFRESH_MS);
+  setInterval(refreshSummary, SUMMARY_REFRESH_MS);
   setInterval(renderClock, 1000);
 }
 

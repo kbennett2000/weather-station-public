@@ -46,6 +46,7 @@
         <div class="status-item"><span class="led" id="led-outdoor"></span>OUTDOOR</div>
         <div class="status-item"><span class="led" id="led-indoor"></span>INDOOR</div>
         <div class="status-item"><span class="led" id="led-basement"></span>BASEMENT</div>
+        <div class="status-item"><span class="led" id="led-net"></span>NET</div>
         <div class="status-item"><span class="led" id="led-gps"></span>GPS</div>
         <div class="status-item"><span class="led" id="led-db"></span>DB</div>
       </div>
@@ -69,7 +70,7 @@
       <div class="hero">
         <div class="hero-temp">
           <div class="hero-temp-main"><span id="out-temp-f">--</span><span class="unit">°F</span></div>
-          <div class="hero-temp-alt"><span id="out-temp-c">--</span> °C  ·  feels <span id="out-feels-f">--</span> °F</div>
+          <div class="hero-temp-alt"><span id="out-temp-c">--</span> °C  ·  feels <span id="out-feels-f">--</span> °F <span class="src-tag" id="out-feels-src"></span></div>
           <div class="hero-temp-label">Air Temperature</div>
         </div>
 
@@ -196,13 +197,95 @@
             <div class="metric-label">Sun Position</div>
             <div class="metric-value" style="font-size:13px" id="astro-sunpos">--</div>
           </div>
+          <div class="metric">
+            <div class="metric-label">Season</div>
+            <div class="metric-value" style="font-size:13px" id="astro-season">--</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label" id="astro-nextevent-label">Next Event</div>
+            <div class="metric-value" style="font-size:13px" id="astro-nextevent">--</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Daylight Δ</div>
+            <div class="metric-value" style="font-size:13px" id="astro-daylendelta">--</div>
+          </div>
         </div>
+
+        <div class="moon-meta" id="sun-extra" style="padding:2px 2px 0">SUNRISE AZ -- · SUNSET AZ -- · SHADOW --</div>
 
         <div class="moon-row">
           <div class="moon-glyph" id="moon-glyph">🌑</div>
           <div class="moon-info">
             <div class="moon-phase" id="moon-phase">--</div>
             <div class="moon-meta" id="moon-meta">--</div>
+            <div class="moon-meta" id="moon-next" style="margin-top:3px">NEW -- · FULL --</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REGIONAL (internet-sourced — optional) -->
+    <section class="panel panel-regional" data-code="WX-NET · F1" id="panel-regional">
+      <div class="panel-head">
+        <span class="led" id="led-regional-head"></span>
+        <span class="panel-head-title">Regional Conditions</span>
+        <span class="confidence-low" id="regional-confidence" style="display:none">LOW CONFIDENCE</span>
+        <span class="panel-head-sub" id="regional-headsub">--</span>
+        <span class="offline-tag" id="regional-offline-tag" style="display:none">
+          <span style="width:4px;height:4px;background:currentColor;border-radius:50%"></span>NO FEED
+        </span>
+      </div>
+
+      <div class="regional-grid">
+        <div class="wind-compass">
+          <svg id="wind-compass-svg" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="80" cy="80" r="74" fill="#0a0e13" stroke="#1d2733" stroke-width="1"/>
+            <circle cx="80" cy="80" r="58" fill="none" stroke="#1a2330" stroke-width="1" stroke-dasharray="2 3"/>
+            <line x1="80" y1="8"  x2="80" y2="20"  stroke="#2a3441" stroke-width="1"/>
+            <line x1="80" y1="140" x2="80" y2="152" stroke="#2a3441" stroke-width="1"/>
+            <line x1="8"  y1="80" x2="20"  y2="80" stroke="#2a3441" stroke-width="1"/>
+            <line x1="140" y1="80" x2="152" y2="80" stroke="#2a3441" stroke-width="1"/>
+            <text x="80" y="6"   text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#6e7a8b">N</text>
+            <text x="157" y="84" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#6e7a8b">E</text>
+            <text x="80" y="159" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#6e7a8b">S</text>
+            <text x="3"  y="84"  text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#6e7a8b">W</text>
+            <g id="wind-needle"></g>
+            <text x="80" y="76" text-anchor="middle" font-family="JetBrains Mono" font-size="26" fill="#ffb547" font-variant-numeric="tabular-nums" id="wind-compass-speed">--</text>
+            <text x="80" y="92" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#7b8696" letter-spacing="1" id="wind-compass-card">--</text>
+            <text x="80" y="104" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#4b5564" letter-spacing="1">MPH</text>
+          </svg>
+        </div>
+
+        <div class="regional-metrics">
+          <div class="metric">
+            <div class="metric-label">Wind</div>
+            <div class="metric-value warm"><span id="reg-wind-mph">--</span><span class="u"> mph</span></div>
+            <div class="metric-sub"><span id="reg-wind-dir">--</span> · <span id="reg-wind-kmh">--</span> km/h</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Gust</div>
+            <div class="metric-value"><span id="reg-gust-mph">--</span><span class="u"> mph</span></div>
+            <div class="metric-sub">Beaufort <span id="reg-beaufort">--</span> · <span id="reg-beaufort-desc">--</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Feels Like</div>
+            <div class="metric-value"><span id="reg-apparent-f">--</span><span class="u"> °F</span></div>
+            <div class="metric-sub">chill <span id="reg-windchill-f">--</span> · THSW <span id="reg-thsw-f">--</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Cloud Cover</div>
+            <div class="metric-value cool"><span id="reg-cloud">--</span><span class="u"> %</span></div>
+            <div class="metric-sub">UV index <span id="reg-uv">--</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Visibility</div>
+            <div class="metric-value"><span id="reg-vis">--</span><span class="u"> km</span></div>
+            <div class="metric-sub">precip <span id="reg-precip">--</span> mm</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Reference ET₀</div>
+            <div class="metric-value"><span id="reg-et0">--</span><span class="u"> mm/h</span></div>
+            <div class="metric-sub">evapotranspiration</div>
           </div>
         </div>
       </div>
@@ -273,6 +356,56 @@
       </div>
     </section>
 
+    <!-- DERIVED THERMODYNAMICS (local, always available) -->
+    <section class="panel panel-derived" data-code="THERMO · A4" id="panel-derived">
+      <div class="panel-head">
+        <span class="led on"></span>
+        <span class="panel-head-title">Derived Thermodynamics</span>
+        <span class="panel-head-sub">LOCAL · COMPUTED</span>
+      </div>
+      <div class="thermo-grid">
+        <div class="metric">
+          <div class="metric-label">Wet Bulb</div>
+          <div class="metric-value"><span id="th-wetbulb-f">--</span><span class="u"> °F</span></div>
+          <div class="metric-sub"><span id="th-wetbulb-c">--</span> °C</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Humidex</div>
+          <div class="metric-value"><span id="th-humidex-c">--</span><span class="u"> °C</span></div>
+          <div class="metric-sub">frost pt <span id="th-frost-c">--</span> °C</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">VPD</div>
+          <div class="metric-value cool"><span id="th-vpd">--</span><span class="u"> kPa</span></div>
+          <div class="metric-sub">deficit</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Mixing Ratio</div>
+          <div class="metric-value"><span id="th-mixing">--</span><span class="u"> g/kg</span></div>
+          <div class="metric-sub">specific <span id="th-specific">--</span></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Vapor Pressure</div>
+          <div class="metric-value"><span id="th-vp">--</span><span class="u"> hPa</span></div>
+          <div class="metric-sub">sat <span id="th-svp">--</span></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Air Density</div>
+          <div class="metric-value"><span id="th-density">--</span><span class="u"> kg/m³</span></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Density Altitude</div>
+          <div class="metric-value"><span id="th-densalt">--</span><span class="u"> ft</span></div>
+          <div class="metric-sub">press alt <span id="th-pressalt">--</span> ft</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Cloud Base</div>
+          <div class="metric-value"><span id="th-cloudbase">--</span><span class="u"> ft</span></div>
+          <div class="metric-sub">est. condensation level</div>
+        </div>
+      </div>
+    </section>
+
     <!-- LIGHT -->
     <section class="panel panel-light" data-code="LIGHT · C1">
       <div class="panel-head">
@@ -300,8 +433,19 @@
           <div class="metric-value" id="light-full">--</div>
         </div>
         <div class="metric">
-          <div class="metric-label">UV Index (est.)</div>
-          <div class="metric-value">— <span style="font-size:11px;color:var(--text-dim)">not measured</span></div>
+          <div class="metric-label">UV Index <span class="est-tag">EST</span></div>
+          <div class="metric-value"><span id="sky-uv">--</span></div>
+          <div class="metric-sub">sun alt <span id="sky-sunalt">--</span>°</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Cloud Cover <span class="est-tag">EST</span></div>
+          <div class="metric-value cool"><span id="sky-cloud">--</span><span class="u"> %</span></div>
+          <div class="metric-sub" id="sky-condition">--</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Irradiance <span class="est-tag">EST</span></div>
+          <div class="metric-value"><span id="sky-irr">--</span><span class="u"> W/m²</span></div>
+          <div class="metric-sub">from illuminance</div>
         </div>
       </div>
     </section>
@@ -342,6 +486,55 @@
             <div class="gps-mono" style="font-size:13px" id="gps-tz">--</div>
             <div class="metric-sub" id="gps-tz-offset">--</div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TODAY / SUMMARY (history-derived) -->
+    <section class="panel panel-summary" data-code="TODAY · D0" id="panel-summary">
+      <div class="panel-head">
+        <span class="led on" id="led-summary-head"></span>
+        <span class="panel-head-title">Today &amp; Trends</span>
+        <span class="panel-head-sub" id="summary-headsub">--</span>
+      </div>
+
+      <div class="window-bar" id="summary-window-bar">
+        <button class="window-btn active" data-period="today">TODAY</button>
+        <button class="window-btn" data-period="24h">24H</button>
+        <button class="window-btn" data-period="7d">7D</button>
+        <button class="window-btn" data-period="30d">30D</button>
+      </div>
+
+      <div class="summary-grid">
+        <div class="metric">
+          <div class="metric-label">Temp High / Low</div>
+          <div class="metric-value warm"><span id="sum-temp-hi">--</span> / <span id="sum-temp-lo">--</span><span class="u"> °F</span></div>
+          <div class="metric-sub">avg <span id="sum-temp-avg">--</span> °F · range <span id="sum-diurnal">--</span> °C</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Pressure Trend</div>
+          <div class="metric-value"><span class="tendency-arrow" id="sum-tendency-arrow">→</span> <span id="sum-tendency" style="font-size:15px">--</span></div>
+          <div class="metric-sub"><span id="sum-tendency-val">--</span> hPa / 3h</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Temp Trend</div>
+          <div class="metric-value"><span id="sum-temp-trend">--</span><span class="u"> °C/h</span></div>
+          <div class="metric-sub">rate of change</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Humidity Range</div>
+          <div class="metric-value cool"><span id="sum-hum-lo">--</span>–<span id="sum-hum-hi">--</span><span class="u"> %</span></div>
+          <div class="metric-sub">dew avg <span id="sum-dew">--</span> °C</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Degree Days</div>
+          <div class="metric-value" style="font-size:15px"><span id="sum-dd">--</span></div>
+          <div class="metric-sub">HDD / CDD / GDD (°F)</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Light · ET₀</div>
+          <div class="metric-value"><span id="sum-dli">--</span><span class="u"> mol/m²</span></div>
+          <div class="metric-sub">ET₀ <span id="sum-et0">--</span> mm</div>
         </div>
       </div>
     </section>
