@@ -133,6 +133,39 @@ def test_history_bad_include_group_returns_400(client: TestClient) -> None:
     assert r.json()["error"]["code"] == "bad_request"
 
 
+def test_history_from_to_window(client: TestClient) -> None:
+    # An explicit `from` defines the window (overriding the default `hours`).
+    r = client.get("/api/v1/history/outdoor?from=2020-01-01T00:00:00Z")
+    assert r.status_code == 200
+    parsed = schemas.HistoryResponse.model_validate(r.json())
+    assert parsed.from_.year == 2020
+    assert parsed.row_count > 0  # fixture-prefilled rows fall in [2020, now]
+
+
+def test_history_from_to_overrides_hours(client: TestClient) -> None:
+    r = client.get(
+        "/api/v1/history/outdoor?hours=1&from=2020-01-01T00:00:00Z&to=2030-01-01T00:00:00Z"
+    )
+    assert r.status_code == 200
+    parsed = schemas.HistoryResponse.model_validate(r.json())
+    assert parsed.from_.year == 2020
+    assert parsed.to.year == 2030
+
+
+def test_history_bad_from_returns_400(client: TestClient) -> None:
+    r = client.get("/api/v1/history/outdoor?from=not-a-date")
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "bad_request"
+
+
+def test_history_from_after_to_returns_400(client: TestClient) -> None:
+    r = client.get(
+        "/api/v1/history/outdoor?from=2030-01-01T00:00:00Z&to=2020-01-01T00:00:00Z"
+    )
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "bad_request"
+
+
 def test_summary_outdoor_returns_stats(client: TestClient) -> None:
     r = client.get("/api/v1/summary/outdoor?period=7d")
     assert r.status_code == 200

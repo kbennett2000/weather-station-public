@@ -31,6 +31,8 @@ async def get_history(
     sensor_id: str,
     request: Request,
     hours: int = Query(24, ge=1, le=24 * 365),
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = Query(None, alias="to"),
     bucket: BucketLiteral = "auto",
     include: str = "weather",
 ) -> HistoryResponse:
@@ -44,14 +46,11 @@ async def get_history(
         raise HTTPException(status_code=404, detail=("history_not_available", sensor_id))
 
     include_groups = _parse_include(include)
-    to_dt = datetime.now(UTC)
-    from_dt = to_dt.replace(microsecond=0)
-    from_ts = int(to_dt.timestamp()) - hours * 3600
-    to_ts = int(to_dt.timestamp())
+    from_ts, to_ts, span_hours = _resolve_window(from_, to, hours)
     from_dt = datetime.fromtimestamp(from_ts, tz=UTC)
     to_dt = datetime.fromtimestamp(to_ts, tz=UTC)
 
-    bucket_seconds = _resolve_bucket(bucket, hours)
+    bucket_seconds = _resolve_bucket(bucket, span_hours)
 
     raw_rows = db_module.outdoor_readings_in_range(db, from_ts, to_ts)
     bucketed = _bucket_rows(raw_rows, bucket_seconds) if bucket_seconds > 0 else raw_rows
@@ -69,6 +68,42 @@ async def get_history(
         row_count=len(rows),
         rows=rows,
     )
+
+
+def _parse_iso_ts(value: str, field: str) -> int:
+    """Parse an ISO 8601 datetime to a UTC epoch. 400 on malformed input."""
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=("bad_request", f"invalid ISO 8601 datetime for {field!r}: {value!r}"),
+        ) from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return int(dt.timestamp())
+
+
+def _resolve_window(from_: str | None, to: str | None, hours: int) -> tuple[int, int, int]:
+    """Resolve the query window to (from_ts, to_ts, span_hours).
+
+    `from`/`to` (ISO 8601) take precedence over `hours` when supplied; `to`
+    defaults to now. Returns the span in whole hours so `bucket=auto` still
+    works. Raises 400 on malformed timestamps or a non-positive window.
+    """
+    now_ts = int(datetime.now(UTC).timestamp())
+    if from_ is None and to is None:
+        return now_ts - hours * 3600, now_ts, hours
+
+    to_ts = _parse_iso_ts(to, "to") if to is not None else now_ts
+    from_ts = _parse_iso_ts(from_, "from") if from_ is not None else to_ts - hours * 3600
+    if from_ts >= to_ts:
+        raise HTTPException(
+            status_code=400,
+            detail=("bad_request", "'from' must be earlier than 'to'"),
+        )
+    return from_ts, to_ts, max(1, (to_ts - from_ts) // 3600)
 
 
 def _parse_include(value: str) -> set[str]:
