@@ -10,7 +10,9 @@ This is the end-user tour. If you've got the sensors built ([`01`](01-building-t
 
 ![Full dashboard](images/01-dashboard-full.png)
 
-Eight panels in a roughly newspaper-style layout. Outdoor + Sky take the upper half because that's the most important data; indoor and basement are smaller live panels; the historical chart band sits across the middle; light, GPS, and device telemetry round out the bottom. The header rides at the top and the footer at the bottom — both can be customised via `branding.toml`.
+Eleven panels in a roughly newspaper-style layout. Outdoor + Sky take the upper half because that's the most important data; the optional **Regional** panel (internet feed) sits alongside them; indoor and basement are smaller live panels; a **Derived Thermodynamics** panel carries the computed-from-local values; light, GPS, a **Today & Trends** summary, the historical chart band, and device telemetry round out the rest. The header rides at the top and the footer at the bottom — both can be customised via `branding.toml`.
+
+The full panel roster, top to bottom: **Outdoor Conditions**, **Sky & Astronomy**, **Regional Conditions** (optional internet feed), **Indoor**, **Indoor Jr** (basement), **Derived Thermodynamics**, **Light Sensor**, **Location & GPS**, **Today & Trends**, **Historical Readings**, **Device Telemetry**. Each is described below.
 
 ---
 
@@ -23,8 +25,9 @@ From left to right:
 - **Title block** — the project name. The subtitle below it (`Collectin' Some Good Ass Weather Data!`) is hard-coded; the title and subtitle treatment in CSS gives the whole dashboard its instrument-panel feel.
 - **Tagline strip** — `// [BRANDING — first rotating tagline]` in the screenshot. Comes from `branding.toml` (`[taglines.rotating]` if non-empty, else `[header.tagline]`). On each page load a random tagline from the rotating list is shown.
 - **SERVER / TZ row** — the host:port the dashboard's served from, and the IANA timezone the server has resolved (derived from the outdoor sensor's GPS, or your `fallback_lat`/`fallback_lon` if GPS hasn't fixed yet).
+- **API quick-links** — `Raw Data` / `Regional` / `Summary` / `API Docs` open the underlying JSON endpoints (`/api/v1/current`, `/api/v1/external`, `/api/v1/summary/outdoor`) and the interactive `/docs` explorer in a new tab. Handy for poking at the raw numbers behind any panel.
 - **Clock + date** — the server's local time, rendered in the resolved zone. The seconds tick smoothly between the 30-second `/api/v1/current` polls — a local interval extrapolates from the last anchor.
-- **Status row** — five LEDs for each subsystem: OUTDOOR / INDOOR / BASEMENT / GPS / DB. Green means online, amber means online but stale, red means offline or unreachable.
+- **Status row** — six LEDs, one per subsystem: OUTDOOR / INDOOR / BASEMENT / NET / GPS / DB. Green means online, amber means online but stale, red means offline or unreachable, dim means not present. **NET** tracks the optional internet feed (see *Regional Conditions* below): it's dark when the feed is disabled, green when fresh, amber when the last fetch has gone stale.
 
 ---
 
@@ -76,10 +79,38 @@ A horizontal time strip showing today's solar events.
 
 - **Yellow gradient bar** = the part of the day between sunrise and sunset (the actual "daytime").
 - **Tick marks**, left-to-right: DAWN, sunrise, solar noon, sunset, DUSK. Each labelled with its local time.
+- **Twilight bands** — fainter ticks flanking sunrise and sunset mark the civil, nautical, and astronomical twilight boundaries plus the golden-hour and blue-hour windows photographers care about.
 - **White triangle** = NOW. Its position is the current time projected onto the same 0:00 → 24:00 strip.
-- **TO SUNSET / SUN POSITION** below: a quick "how many hours until dark" + "sun's current azimuth and altitude" in degrees.
 
-The moon row at the bottom of the panel is a single line — phase emoji + name + illumination percentage, then RISE / SET / DIST / AZ / ALT for the moon. Lunar distance varies between ~360,000 and ~400,000 km over a month, so that number actually moves.
+Below the arc is a metrics strip:
+
+- **Day Length** — hours of daylight today.
+- **To Sunset** (flips to **To Sunrise** after dark) — countdown to the next horizon crossing.
+- **Sun Position** — the sun's current azimuth and altitude, in degrees.
+- **Season** — the current astronomical season.
+- **Next Event** — the next solstice or equinox, and how far off it is.
+- **Daylight Δ** — how much the day has lengthened or shortened versus yesterday (in seconds) — the thing you actually notice around the solstices.
+
+A one-liner under that reports **SUNRISE AZ / SUNSET AZ** (the compass bearings where the sun crests and drops today) and **SHADOW** (the shadow-length multiplier for the current sun altitude — how many times an object's own height its shadow stretches right now).
+
+The moon row at the bottom of the panel is a single line — phase emoji + name + illumination percentage, then RISE / SET / DIST / AZ / ALT for the moon. Lunar distance varies between ~360,000 and ~400,000 km over a month, so that number actually moves. A second line gives the dates of the **next new and full moons**.
+
+---
+
+## Regional Conditions
+
+![Regional panel](images/14-regional.png)
+
+This panel is **optional** and **off by default**. The outdoor sensor has no anemometer, so wind — and everything that depends on it — comes from an internet weather feed, *if* you opt in by enabling the `[external]` block in `weather.toml` (see [`02-install-and-configure.md`](02-install-and-configure.md)). The station is offline-first: with the feed disabled, or no internet, every other panel works exactly the same and this one simply shows **NO FEED**.
+
+- **Wind compass** — a needle pointing the direction the wind is blowing *from* (meteorological convention), with the speed in mph at the centre.
+- **Wind / Gust** — sustained speed and gust speed (mph, with km/h alongside), plus the **Beaufort** force and its description ("Gentle breeze", "Near gale", …).
+- **Feels Like** — the wind-aware **apparent temperature**. The subtitle adds **wind chill** (the cold-side index, only meaningful at low temperature with wind) and **THSW** (Temperature–Humidity–Sun–Wind — a hot-side comfort index that folds in solar load; it's an estimate). When this feed is live, the headline feels-like value up in the **Outdoor Conditions** panel switches from the local heat-index to this wind-aware number automatically.
+- **Cloud Cover / UV** — regional cloud percentage and UV index from the provider.
+- **Visibility / Precip** — horizontal visibility (km) and recent precipitation (mm).
+- **Reference ET₀** — hourly reference evapotranspiration (mm/h) by the FAO-56 Penman-Monteith method, a standard irrigation-planning figure that needs wind to compute (which is why it lives here and not in the local panels).
+
+The panel header shows where the data came from — the provider (`open-meteo`, `nws`, or `wunderground`) and, for station-based providers, the station ID and its distance from you. Two extra states can appear: a **LOW CONFIDENCE** tag (when `cross_check` is on and the model and a nearby station disagree about wind) and a stale indicator on the **NET** LED when the last successful fetch has aged out.
 
 ---
 
@@ -87,13 +118,13 @@ The moon row at the bottom of the panel is a single line — phase emoji + name 
 
 ![Indoor + Basement panels](images/07-indoor-basement.png)
 
-Each panel is the same shape: big °F number on the left, smaller °C below, then three stacked metrics (humidity, dew point, pressure). The humidity tile shows relative humidity % with an absolute humidity (g/m³) subtitle, same as the outdoor panel — useful for comparing moisture content between rooms when their temperatures differ. Pressure here is *station* pressure — these sensors live indoors, so the sea-level adjustment isn't meaningful. (Useful for spotting weather fronts coming through even from inside the house.)
+These two smaller panels share a shape: big °F number on the left, smaller °C below, then stacked metrics. The **Indoor** panel shows humidity, dew point, and pressure; **Indoor Jr** — the basement unit, same hardware as the indoor sensor, just a different room — shows humidity and pressure. The humidity tile shows relative humidity % with an absolute humidity (g/m³) subtitle, same as the outdoor panel — useful for comparing moisture content between rooms when their temperatures differ. Pressure here is *station* pressure — these sensors live indoors, so the sea-level adjustment isn't meaningful. (Useful for spotting weather fronts coming through even from inside the house.)
 
 If a sensor goes offline, the panel changes:
 
 ![Offline state](images/13-offline-state.png)
 
-The basement panel in the screenshot above is offline. You'll see:
+The Indoor Jr (basement) panel in the screenshot above is offline. You'll see:
 
 - A red **OFFLINE** tag in the panel header.
 - Status LED for that sensor turns red on the page header's LED row.
@@ -101,6 +132,23 @@ The basement panel in the screenshot above is offline. You'll see:
 - The branding offline-copy slot remains visible.
 
 This is by design — a "no data" panel is more confusing than a "here's what we last saw, X minutes ago" panel.
+
+---
+
+## Derived Thermodynamics
+
+![Derived Thermodynamics panel](images/15-derived-thermo.png)
+
+Everything in this panel is **computed by the server from the outdoor sensor's temperature, humidity, and pressure** — no extra hardware involved. It's the stuff you'd otherwise reach for a psychrometric chart to get. All of it is also available per-sensor in the API under `sensors.<id>.derived`.
+
+- **Wet Bulb** — the temperature a thermometer wrapped in a wet wick would read; how cool you can get by evaporation. The hot-weather number that actually matters for heat stress.
+- **Humidex** — the Canadian "feels like" combining heat and humidity; the subtitle gives the **frost point** (like dew point, but the temperature at which frost rather than dew would form).
+- **VPD** (vapour-pressure deficit) — how much more water the air *could* hold, in kPa. The single most useful number for greenhouses and humidors: low VPD = muggy/condensing, high VPD = drying.
+- **Mixing Ratio / Specific Humidity** — grams of water vapour per kilogram of dry air (mixing ratio) and per kilogram of total air (specific humidity). Unlike RH, these don't change when the air merely warms or cools.
+- **Vapor Pressure** — the partial pressure of water vapour now (hPa), with the saturation value (the most it could be at this temperature) in the subtitle.
+- **Air Density** — density of the moist air (kg/m³). Drops with heat, humidity, and altitude.
+- **Density Altitude** — the altitude the current air density corresponds to in a standard atmosphere, with **pressure altitude** alongside. Aviation numbers: a hot day at altitude can make the air "feel" thousands of feet higher to a wing or prop.
+- **Cloud Base** — the estimated height of the lifting condensation level (where rising surface air would start to form cloud), from the temperature/dew-point spread.
 
 ---
 
@@ -122,6 +170,8 @@ The light panel on the left is outdoor-only. The big number is illuminance in lu
 
 Below the lux value: VISIBLE, INFRARED, FULL SPECTRUM raw counts from the TSL2591's three channels. Mostly diagnostic; the lux value is the one you actually care about.
 
+The right-hand tiles — **UV Index**, **Cloud Cover**, **Irradiance** — each carry an **EST** chip because they are *estimates*, not measurements. The server infers them by comparing the measured lux against the clear-sky brightness expected for the sun's current altitude: a sky much dimmer than clear-sky implies cloud, and the solar geometry plus that cloud factor yields a UV-index and an irradiance (W/m²) estimate. The sub-labels show the **sun altitude** the estimate assumed and a humanised **sky condition** ("clear", "partly cloudy", "overcast", …). Cloud and UV blank out when the sun is too low for the inference to mean anything (near and after sunset). Treat these as "good enough to glance at", not instrument-grade — a real pyranometer they are not.
+
 The location panel on the right is also outdoor-only:
 
 - **DECIMAL** — lat/lon in decimal degrees, the format Google Maps uses.
@@ -132,6 +182,23 @@ The location panel on the right is also outdoor-only:
 - **TIMEZONE** — the IANA zone the server resolved from your coords. Drives every wall-clock time on the dashboard.
 
 If GPS has no fix yet (`SATELLITES = 0`), most of these fall back to "—" and the timezone falls back to whatever the server's `fallback_lat`/`fallback_lon` resolves to.
+
+---
+
+## Today & Trends
+
+![Today & Trends panel](images/16-today-trends.png)
+
+Where the charts show the *shape* of the recent past, this panel reduces it to **numbers that summarise a window** — highs, lows, trends, and a few agronomy/comfort aggregates. It's outdoor-only and comes straight from `GET /api/v1/summary/outdoor`.
+
+The button bar at the top picks the window: **TODAY** (since local midnight), **24H**, **7D**, or **30D**. The header sub-label reads **`N SAMPLES`** — the count of raw logged readings in that window. (Note this says *samples*, not the *buckets* the Historical panel reports: here it's always the raw row count, so a 30-day window shows a much bigger number than today.)
+
+- **Temp High / Low** — the window's hottest and coldest readings (°F), with the average and the **diurnal range** (max − min, °C) below.
+- **Pressure Trend** — an arrow (↑ rising / ↓ falling / → steady) plus the actual 3-hour change in hPa. "Steady" is anything within ±0.5 hPa over three hours. Falling pressure is the classic "weather's coming" signal.
+- **Temp Trend** — the rate the temperature is currently moving, in °C per hour, as a least-squares slope over the window. Positive is warming.
+- **Humidity Range** — the low–high relative-humidity span, with the average dew point below.
+- **Degree Days** — three running totals in °F-days: **HDD** (heating, base 65°F), **CDD** (cooling, base 65°F), and **GDD** (growing, base 50°F). Heating/cooling degree days estimate how much you ran the furnace or AC; growing degree days track accumulated warmth for gardening. The base is the temperature below (HDD/GDD) or above (CDD) which the day "counts."
+- **Light · ET₀** — the **Daily Light Integral** (mol/m², the total photosynthetic light delivered — a greenhouse number) and **ET₀**, reference evapotranspiration in mm by the Hargreaves method. Hargreaves is *temperature-only* (it doesn't need wind), so it's an approximation — distinct from the wind-driven Penman-Monteith ET₀ in the Regional panel, and deliberately so, since the logged history has no wind.
 
 ---
 
@@ -262,12 +329,13 @@ Everything you see on the dashboard, plus more, is available as JSON from the se
 | `GET /api/v1/health` | Server / DB / loggers / sensors aggregate health |
 | `GET /docs` | Interactive OpenAPI explorer — every endpoint, every parameter, try-it-out |
 
-> **More than meets the eye.** Beyond the panels above, `sensors.<id>.derived` carries a stack of
-> computed values — wet-bulb, VPD, mixing/specific humidity, humidex, frost point, air density,
-> density/pressure altitude, cloud base — plus a `derived.sky` sub-block (estimated irradiance,
-> cloud cover, UV index, sky condition). The **Derived Thermodynamics** and **Today & Trends**
-> dashboard panels surface these. The full field list is in the OpenAPI explorer (`/docs`) and
-> [`docs/design/02-api-design.md`](design/02-api-design.md).
+> **More than meets the eye.** Most of these numbers also live in the API under
+> `sensors.<id>.derived`: the thermodynamics stack (wet-bulb, VPD, mixing/specific humidity,
+> humidex, frost point, air density, density/pressure altitude, cloud base) that the **Derived
+> Thermodynamics** panel shows, plus a `derived.sky` sub-block (estimated irradiance, cloud cover,
+> UV index, sky condition) that the **Light Sensor** panel surfaces. The windowed aggregates behind
+> **Today & Trends** come from `/api/v1/summary/outdoor` instead. The full field list is in the
+> OpenAPI explorer (`/docs`) and [`docs/design/02-api-design.md`](design/02-api-design.md).
 
 A few useful one-liners:
 
