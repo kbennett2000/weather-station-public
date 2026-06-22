@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/banner.png" alt="Jones' Big Ass Home Weather Station — DIY networked weather dashboard" width="100%">
+</p>
+
 # Jones' Big Ass Home Weather Station™ Dashboard
 
 **Hey friends!**  
