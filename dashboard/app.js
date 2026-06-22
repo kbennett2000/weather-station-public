@@ -105,6 +105,17 @@ function fmtTimeOfDay(isoString) {
   });
 }
 
+function fmtTimestampLabel(isoString) {
+  // Chart hover tooltip title: station-local date + time (e.g. "Jun 22 14:05").
+  // Date is included because the 7D window spans multiple days. Anchored to the
+  // station zone via `timeZone: timezone`, same as fmtTimeOfDay above.
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: timezone });
+  const time = d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: timezone });
+  return `${date} ${time}`;
+}
+
 function rssiBand(rssi) {
   if (rssi === null || rssi === undefined) return '--';
   if (rssi > -50) return 'excellent';
@@ -743,15 +754,41 @@ function tzOffsetLabel() {
 // History + charts
 // ─────────────────────────────────────────────────────────────────
 
-function lineConfig(color, fill) {
+function lineConfig(color, fill, unit, digits) {
   return {
     type: 'line',
-    data: { labels: [], datasets: [{ data: [], borderColor: color, backgroundColor: fill, borderWidth: 1.5, fill: true, tension: 0.35, pointRadius: 0 }] },
+    data: { labels: [], datasets: [{ data: [], borderColor: color, backgroundColor: fill, borderWidth: 1.5, fill: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, pointHoverBackgroundColor: color, pointHoverBorderColor: color }] },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: 400 },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      // Hover anywhere along x and snap to the nearest sample — necessary
+      // because the line draws no points (pointRadius: 0).
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          backgroundColor: '#0c1117',
+          borderColor: HAIRLINE,
+          borderWidth: 1,
+          titleColor: TEXT_DIM,
+          bodyColor: color,
+          titleFont: { family: "'JetBrains Mono', monospace", size: 10, weight: 'normal' },
+          bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
+          padding: 8,
+          displayColors: false,
+          callbacks: {
+            title: items => (items.length ? fmtTimestampLabel(items[0].label) : ''),
+            label: ctx => {
+              const v = ctx.parsed.y;
+              if (v === null || v === undefined) return '--';
+              const num = digits === 0 ? Math.round(v).toLocaleString() : v.toFixed(digits);
+              return unit ? `${num} ${unit}` : num;
+            }
+          }
+        }
+      },
       scales: {
         x: { display: false, grid: { display: false } },
         y: {
@@ -770,12 +807,12 @@ function initCharts() {
   Chart.defaults.font.family = "'JetBrains Mono', monospace";
   Chart.defaults.font.size = 10;
 
-  charts.temp  = new Chart($('chartTemp'),  lineConfig(AMBER, AMBER_DIM));
-  charts.hum   = new Chart($('chartHum'),   lineConfig(CYAN,  CYAN_DIM));
-  charts.press = new Chart($('chartPress'), lineConfig(AMBER, AMBER_DIM));
-  charts.dew   = new Chart($('chartDew'),   lineConfig(CYAN,  CYAN_DIM));
-  charts.vis   = new Chart($('chartVis'),   lineConfig(AMBER, AMBER_DIM));
-  charts.ir    = new Chart($('chartIR'),    lineConfig(CYAN,  CYAN_DIM));
+  charts.temp  = new Chart($('chartTemp'),  lineConfig(AMBER, AMBER_DIM, '°F',   1));
+  charts.hum   = new Chart($('chartHum'),   lineConfig(CYAN,  CYAN_DIM,  '%',    1));
+  charts.press = new Chart($('chartPress'), lineConfig(AMBER, AMBER_DIM, 'inHg', 2));
+  charts.dew   = new Chart($('chartDew'),   lineConfig(CYAN,  CYAN_DIM,  '°F',   1));
+  charts.vis   = new Chart($('chartVis'),   lineConfig(AMBER, AMBER_DIM, '',     0));
+  charts.ir    = new Chart($('chartIR'),    lineConfig(CYAN,  CYAN_DIM,  '',     0));
 }
 
 async function refreshHistory() {
@@ -791,6 +828,7 @@ async function refreshHistory() {
   setText('hist-samples', formatHistLabel(rows.length, data.bucket_seconds || 0));
   setText('tel-records', rows.length.toLocaleString());
 
+  const times = rows.map(r => r.timestamp);
   const tempF = rows.map(r => cToF(r.temperature_c));
   const hum   = rows.map(r => r.humidity_pct);
   const press = rows.map(r => hpaToInHg(r.pressure_sealevel_hpa));
@@ -798,12 +836,12 @@ async function refreshHistory() {
   const vis   = rows.map(r => r.visible);
   const ir    = rows.map(r => r.ir);
 
-  pushSeries(charts.temp,  tempF);
-  pushSeries(charts.hum,   hum);
-  pushSeries(charts.press, press);
-  pushSeries(charts.dew,   dewF);
-  pushSeries(charts.vis,   vis);
-  pushSeries(charts.ir,    ir);
+  pushSeries(charts.temp,  tempF, times);
+  pushSeries(charts.hum,   hum,   times);
+  pushSeries(charts.press, press, times);
+  pushSeries(charts.dew,   dewF,  times);
+  pushSeries(charts.vis,   vis,   times);
+  pushSeries(charts.ir,    ir,    times);
 
   // Update the chart-cell "current" labels from the last sample.
   const last = rows[rows.length - 1] || {};
@@ -833,11 +871,21 @@ function formatHistLabel(count, bucketSeconds) {
   return `${n} ${count === 1 ? 'BUCKET' : 'BUCKETS'} (${avg})`;
 }
 
-function pushSeries(chart, values) {
+function pushSeries(chart, values, timestamps) {
   // Filter out nulls — Chart.js can plot them as gaps, but our visual
-  // expectation is solid lines, so drop nulls instead.
-  const series = values.filter(v => v !== null && v !== undefined);
-  chart.data.labels = series.map((_, i) => i);
+  // expectation is solid lines, so drop nulls instead. Timestamps are
+  // filtered in lockstep so each kept value keeps its own time label
+  // (used by the hover tooltip).
+  const series = [];
+  const labels = [];
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v !== null && v !== undefined) {
+      series.push(v);
+      labels.push(timestamps[i]);
+    }
+  }
+  chart.data.labels = labels;
   chart.data.datasets[0].data = series;
   chart.update('none');
 }
