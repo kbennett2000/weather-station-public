@@ -275,6 +275,7 @@ body::after {
 .panel-gps      { grid-column: span 6; }
 .panel-summary  { grid-column: span 12; }
 .panel-charts   { grid-column: span 12; }
+.panel-regional-hist { grid-column: span 12; }
 .panel-device   { grid-column: span 12; }
 
 .panel::after {
@@ -749,6 +750,14 @@ body::after {
   gap: 18px;
 }
 
+/* The regional panel carries four charts, so it gets its own single clean
+   row rather than borrowing the 3-up grid and orphaning one cell. */
+.charts-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+}
+
 .chart-cell {
   background: rgba(0,0,0,0.18);
   border: 1px solid var(--hairline);
@@ -865,6 +874,7 @@ body::after {
   .panel-light    { grid-column: span 6; }
   .panel-gps      { grid-column: span 6; }
   .charts-grid    { grid-template-columns: repeat(2, 1fr); }
+  .charts-grid-4  { grid-template-columns: repeat(2, 1fr); }
   .telemetry-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
@@ -878,10 +888,10 @@ body::after {
   .hero-temp-main { font-size: 64px; }
   .panel-out, .panel-astro, .panel-regional, .panel-indoor, .panel-basement,
   .panel-derived, .panel-light, .panel-gps, .panel-summary,
-  .panel-charts, .panel-device { grid-column: span 12; }
+  .panel-charts, .panel-regional-hist, .panel-device { grid-column: span 12; }
   .regional-grid { grid-template-columns: 1fr; }
   .regional-metrics { grid-template-columns: repeat(2, 1fr); }
   .thermo-grid, .summary-grid { grid-template-columns: repeat(2, 1fr); }
-  .charts-grid { grid-template-columns: 1fr; }
+  .charts-grid, .charts-grid-4 { grid-template-columns: 1fr; }
   .telemetry-grid { grid-template-columns: repeat(2, 1fr); }
 }

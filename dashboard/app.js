@@ -812,6 +812,16 @@ const HISTORY_CHARTS = [
   { key: 'ir',     canvas: 'chartIR',     label: 'chart-cur-ir',     color: CYAN,  fill: CYAN_DIM,  unit: '',     digits: 0, value: r => r.ir },
 ];
 
+// The regional series comes from the optional internet feed, so it lives in
+// its own panel and its own fetch — mixing EXTERNAL provenance into the
+// local-sensor charts is what ADR-0002 rules out.
+const REGIONAL_CHARTS = [
+  { key: 'wind',  canvas: 'chartWind',  label: 'chart-cur-wind',  color: AMBER, fill: AMBER_DIM, unit: 'mph', digits: 1, value: r => r.wind_speed_mph },
+  { key: 'gust',  canvas: 'chartGust',  label: 'chart-cur-gust',  color: CYAN,  fill: CYAN_DIM,  unit: 'mph', digits: 1, value: r => r.wind_gust_mph },
+  { key: 'cloud', canvas: 'chartCloud', label: 'chart-cur-cloud', color: AMBER, fill: AMBER_DIM, unit: '%',   digits: 0, value: r => r.cloud_cover_pct },
+  { key: 'uv',    canvas: 'chartUV',    label: 'chart-cur-uv',    color: CYAN,  fill: CYAN_DIM,  unit: '',    digits: 1, value: r => r.uv_index },
+];
+
 // Shared by the hover tooltip and the per-chart header readout so the two
 // can never drift. digits === 0 means "integer with thousands separators".
 function fmtChartValue(v, unit, digits) {
@@ -864,6 +874,60 @@ async function refreshHistory() {
 
   // Series into the charts, last sample into each cell's header readout.
   applyChartData(HISTORY_CHARTS, rows, rows.map(r => r.timestamp));
+
+  refreshRegionalHistory();
+}
+
+// The Regional History panel is entirely absent when [external] is off —
+// that is a durable fact about the install, not a transient outage, so
+// there is nothing to explain to the reader. When the feed IS on but has
+// logged too little to draw, the panel shows itself dimmed with a NO DATA
+// tag, which is the offline affordance ADR-0002 asks for.
+async function refreshRegionalHistory() {
+  const panel = $('panel-regional-hist');
+  if (!panel) return;
+
+  let data;
+  try {
+    data = await fetchJson(`/api/v1/external/history?hours=${currentWindowHours}&include=wind,sky`);
+  } catch (e) {
+    console.warn('regional history fetch failed:', e);
+    setRegionalHistState(panel, 'nodata');
+    return;
+  }
+
+  if (data.enabled === false) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+
+  // Charts are built on first reveal so an install that never turns the
+  // feed on never constructs them.
+  if (!charts.wind) buildCharts(REGIONAL_CHARTS);
+
+  const rows = data.rows || [];
+  // A single point draws nothing with pointRadius: 0, so treat <2 as empty.
+  if (rows.length < 2) {
+    setRegionalHistState(panel, 'nodata');
+    return;
+  }
+
+  setRegionalHistState(panel, 'ok');
+  setText('regional-hist-source', `${data.provider || '--'} · ${formatHistLabel(rows.length, data.bucket_seconds || 0)}`);
+  applyChartData(REGIONAL_CHARTS, rows, rows.map(r => r.timestamp));
+}
+
+function setRegionalHistState(panel, state) {
+  const ok = state === 'ok';
+  panel.classList.toggle('offline', !ok);
+  const tag = $('regional-hist-offline-tag');
+  if (tag) tag.style.display = ok ? 'none' : 'inline-flex';
+  setLed('led-regional-hist', ok ? 'on' : 'off');
+  if (!ok) {
+    setText('regional-hist-source', 'awaiting data');
+    REGIONAL_CHARTS.forEach(spec => setText(spec.label, '--'));
+  }
 }
 
 function formatHistLabel(count, bucketSeconds) {

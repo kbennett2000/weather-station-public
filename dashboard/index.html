@@ -619,6 +619,49 @@
       </div>
     </section>
 
+    <!-- REGIONAL HISTORY (internet feed; hidden entirely when [external] is off) -->
+    <section class="panel panel-regional-hist" data-code="HIST · D2" id="panel-regional-hist" hidden>
+      <div class="panel-head">
+        <span class="led on" id="led-regional-hist"></span>
+        <span class="panel-head-title">Regional History</span>
+        <span class="panel-head-sub" id="regional-hist-source">--</span>
+        <span class="offline-tag" id="regional-hist-offline-tag" style="display:none">
+          <span style="width:4px;height:4px;background:currentColor;border-radius:50%"></span>NO DATA
+        </span>
+      </div>
+
+      <div class="charts-grid-4">
+        <div class="chart-cell">
+          <div class="chart-cell-head">
+            <span class="chart-title">Wind Speed</span>
+            <span class="chart-current" id="chart-cur-wind">--</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="chartWind"></canvas></div>
+        </div>
+        <div class="chart-cell">
+          <div class="chart-cell-head">
+            <span class="chart-title">Wind Gust</span>
+            <span class="chart-current" id="chart-cur-gust">--</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="chartGust"></canvas></div>
+        </div>
+        <div class="chart-cell">
+          <div class="chart-cell-head">
+            <span class="chart-title">Cloud Cover</span>
+            <span class="chart-current" id="chart-cur-cloud">--</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="chartCloud"></canvas></div>
+        </div>
+        <div class="chart-cell">
+          <div class="chart-cell-head">
+            <span class="chart-title">UV Index</span>
+            <span class="chart-current" id="chart-cur-uv">--</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="chartUV"></canvas></div>
+        </div>
+      </div>
+    </section>
+
     <!-- DEVICE TELEMETRY -->
     <section class="panel panel-device" data-code="TELEM · E1">
       <div class="panel-head">
