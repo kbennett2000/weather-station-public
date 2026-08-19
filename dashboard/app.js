@@ -780,12 +780,7 @@ function lineConfig(color, fill, unit, digits) {
           displayColors: false,
           callbacks: {
             title: items => (items.length ? fmtTimestampLabel(items[0].label) : ''),
-            label: ctx => {
-              const v = ctx.parsed.y;
-              if (v === null || v === undefined) return '--';
-              const num = digits === 0 ? Math.round(v).toLocaleString() : v.toFixed(digits);
-              return unit ? `${num} ${unit}` : num;
-            }
+            label: ctx => fmtChartValue(ctx.parsed.y, unit, digits)
           }
         }
       },
@@ -801,18 +796,55 @@ function lineConfig(color, fill, unit, digits) {
   };
 }
 
+// Every history chart is declared once, here: how it looks, how it formats
+// its numbers, and how to pull its series out of a history row. Chart
+// construction, the series push and the header readouts all loop over this,
+// so adding a chart is one entry rather than four edits scattered across
+// two files.
+const HISTORY_CHARTS = [
+  { key: 'temp',   canvas: 'chartTemp',   label: 'chart-cur-temp',   color: AMBER, fill: AMBER_DIM, unit: '°F',   digits: 1, value: r => cToF(r.temperature_c) },
+  { key: 'hum',    canvas: 'chartHum',    label: 'chart-cur-hum',    color: CYAN,  fill: CYAN_DIM,  unit: '%',    digits: 1, value: r => r.humidity_pct },
+  { key: 'press',  canvas: 'chartPress',  label: 'chart-cur-press',  color: AMBER, fill: AMBER_DIM, unit: 'inHg', digits: 2, value: r => hpaToInHg(r.pressure_sealevel_hpa) },
+  { key: 'dew',    canvas: 'chartDew',    label: 'chart-cur-dew',    color: CYAN,  fill: CYAN_DIM,  unit: '°F',   digits: 1, value: r => cToF(r.dewpoint_c) },
+  { key: 'vis',    canvas: 'chartVis',    label: 'chart-cur-vis',    color: AMBER, fill: AMBER_DIM, unit: '',     digits: 0, value: r => r.visible },
+  { key: 'ir',     canvas: 'chartIR',     label: 'chart-cur-ir',     color: CYAN,  fill: CYAN_DIM,  unit: '',     digits: 0, value: r => r.ir },
+];
+
+// Shared by the hover tooltip and the per-chart header readout so the two
+// can never drift. digits === 0 means "integer with thousands separators".
+function fmtChartValue(v, unit, digits) {
+  if (v === null || v === undefined) return '--';
+  const num = digits === 0 ? Math.round(v).toLocaleString() : v.toFixed(digits);
+  return unit ? `${num} ${unit}` : num;
+}
+
+function buildCharts(specs) {
+  for (const spec of specs) {
+    const el = $(spec.canvas);
+    if (!el) continue;
+    charts[spec.key] = new Chart(el, lineConfig(spec.color, spec.fill, spec.unit, spec.digits));
+  }
+}
+
+// Push one set of rows through a spec list: series into the chart, last
+// sample into the cell's header readout.
+function applyChartData(specs, rows, times) {
+  const last = rows[rows.length - 1] || {};
+  for (const spec of specs) {
+    const chart = charts[spec.key];
+    if (!chart) continue;
+    pushSeries(chart, rows.map(spec.value), times);
+    setText(spec.label, fmtChartValue(spec.value(last), spec.unit, spec.digits));
+  }
+}
+
 function initCharts() {
   Chart.defaults.color = TEXT_DIM;
   Chart.defaults.borderColor = HAIRLINE;
   Chart.defaults.font.family = "'JetBrains Mono', monospace";
   Chart.defaults.font.size = 10;
 
-  charts.temp  = new Chart($('chartTemp'),  lineConfig(AMBER, AMBER_DIM, '°F',   1));
-  charts.hum   = new Chart($('chartHum'),   lineConfig(CYAN,  CYAN_DIM,  '%',    1));
-  charts.press = new Chart($('chartPress'), lineConfig(AMBER, AMBER_DIM, 'inHg', 2));
-  charts.dew   = new Chart($('chartDew'),   lineConfig(CYAN,  CYAN_DIM,  '°F',   1));
-  charts.vis   = new Chart($('chartVis'),   lineConfig(AMBER, AMBER_DIM, '',     0));
-  charts.ir    = new Chart($('chartIR'),    lineConfig(CYAN,  CYAN_DIM,  '',     0));
+  buildCharts(HISTORY_CHARTS);
 }
 
 async function refreshHistory() {
@@ -828,29 +860,8 @@ async function refreshHistory() {
   setText('hist-samples', formatHistLabel(rows.length, data.bucket_seconds || 0));
   setText('tel-records', rows.length.toLocaleString());
 
-  const times = rows.map(r => r.timestamp);
-  const tempF = rows.map(r => cToF(r.temperature_c));
-  const hum   = rows.map(r => r.humidity_pct);
-  const press = rows.map(r => hpaToInHg(r.pressure_sealevel_hpa));
-  const dewF  = rows.map(r => cToF(r.dewpoint_c));
-  const vis   = rows.map(r => r.visible);
-  const ir    = rows.map(r => r.ir);
-
-  pushSeries(charts.temp,  tempF, times);
-  pushSeries(charts.hum,   hum,   times);
-  pushSeries(charts.press, press, times);
-  pushSeries(charts.dew,   dewF,  times);
-  pushSeries(charts.vis,   vis,   times);
-  pushSeries(charts.ir,    ir,    times);
-
-  // Update the chart-cell "current" labels from the last sample.
-  const last = rows[rows.length - 1] || {};
-  setText('chart-cur-temp',  last.temperature_c  !== undefined && last.temperature_c  !== null ? `${cToF(last.temperature_c).toFixed(1)} °F` : '--');
-  setText('chart-cur-hum',   last.humidity_pct   !== undefined && last.humidity_pct   !== null ? `${last.humidity_pct.toFixed(1)} %` : '--');
-  setText('chart-cur-press', last.pressure_sealevel_hpa !== undefined && last.pressure_sealevel_hpa !== null ? `${hpaToInHg(last.pressure_sealevel_hpa).toFixed(2)} inHg` : '--');
-  setText('chart-cur-dew',   last.dewpoint_c     !== undefined && last.dewpoint_c     !== null ? `${cToF(last.dewpoint_c).toFixed(1)} °F` : '--');
-  setText('chart-cur-vis',   last.visible !== undefined && last.visible !== null ? Math.round(last.visible).toLocaleString() : '--');
-  setText('chart-cur-ir',    last.ir !== undefined && last.ir !== null ? Math.round(last.ir).toLocaleString() : '--');
+  // Series into the charts, last sample into each cell's header readout.
+  applyChartData(HISTORY_CHARTS, rows, rows.map(r => r.timestamp));
 }
 
 function formatHistLabel(count, bucketSeconds) {
