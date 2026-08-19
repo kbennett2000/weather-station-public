@@ -806,6 +806,8 @@ const HISTORY_CHARTS = [
   { key: 'hum',    canvas: 'chartHum',    label: 'chart-cur-hum',    color: CYAN,  fill: CYAN_DIM,  unit: '%',    digits: 1, value: r => r.humidity_pct },
   { key: 'press',  canvas: 'chartPress',  label: 'chart-cur-press',  color: AMBER, fill: AMBER_DIM, unit: 'inHg', digits: 2, value: r => hpaToInHg(r.pressure_sealevel_hpa) },
   { key: 'dew',    canvas: 'chartDew',    label: 'chart-cur-dew',    color: CYAN,  fill: CYAN_DIM,  unit: '°F',   digits: 1, value: r => cToF(r.dewpoint_c) },
+  { key: 'abshum', canvas: 'chartAbsHum', label: 'chart-cur-abshum', color: AMBER, fill: AMBER_DIM, unit: 'g/m³', digits: 1, value: r => r.absolute_humidity_g_m3 },
+  { key: 'densalt',canvas: 'chartDensAlt',label: 'chart-cur-densalt',color: CYAN,  fill: CYAN_DIM,  unit: 'ft',   digits: 0, value: r => r.density_altitude_ft },
   { key: 'vis',    canvas: 'chartVis',    label: 'chart-cur-vis',    color: AMBER, fill: AMBER_DIM, unit: '',     digits: 0, value: r => r.visible },
   { key: 'ir',     canvas: 'chartIR',     label: 'chart-cur-ir',     color: CYAN,  fill: CYAN_DIM,  unit: '',     digits: 0, value: r => r.ir },
 ];
@@ -850,7 +852,7 @@ function initCharts() {
 async function refreshHistory() {
   let data;
   try {
-    data = await fetchJson(`/api/v1/history/outdoor?hours=${currentWindowHours}&include=weather,light`);
+    data = await fetchJson(`/api/v1/history/outdoor?hours=${currentWindowHours}&include=weather,light,thermo`);
   } catch (e) {
     console.warn('history fetch failed:', e);
     return;
