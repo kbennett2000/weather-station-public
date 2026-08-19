@@ -66,9 +66,17 @@ online_threshold_seconds = 300
 temp_offset_c = 0.0
 """
 
+EXTERNAL_TOML = """
+[external]
+enabled = true
+provider = "open-meteo"
+refresh_interval_seconds = 3600
+"""
 
-@pytest.fixture
-def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+
+def _make_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, external: str
+) -> Iterator[TestClient]:
     fixture_dir = tmp_path / "fixtures"
     shutil.copytree(FIXTURE_SRC, fixture_dir)
 
@@ -80,6 +88,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
             fixture_dir=str(fixture_dir),
             branding_path=str(BRANDING_EXAMPLE),
         )
+        + external
     )
 
     monkeypatch.setenv("WEATHER_CONFIG", str(cfg))
@@ -90,3 +99,24 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     app = create_app()
     with TestClient(app) as tc:
         yield tc
+
+
+@pytest.fixture
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    """The default install: no [external] block, so the feed is disabled."""
+    yield from _make_client(tmp_path, monkeypatch, "")
+
+
+@pytest.fixture
+def external_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    """An install with the optional internet feed switched on.
+
+    The provider call is stubbed out: tests that need logged observations
+    seed external_readings directly, and no unit test should depend on
+    reaching the internet.
+    """
+    monkeypatch.setattr(
+        "weather_server.external.task.fetch_external",
+        lambda *args, **kwargs: None,
+    )
+    yield from _make_client(tmp_path, monkeypatch, EXTERNAL_TOML)

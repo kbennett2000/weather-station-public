@@ -7,9 +7,11 @@ inputs. Each `build_*` function returns a Pydantic model from schemas.py.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from .bucketing import AggPolicy
 from .config import Config, SensorConfig
 from .derivations import astronomy as astro
 from .derivations import fused
@@ -523,4 +525,78 @@ def build_history_row(
             if k in payload:
                 out[k] = payload[k]
 
+    return out
+
+
+# ── external history rows ───────────────────────────────────────────────────
+
+
+EXTERNAL_HISTORY_GROUPS = {
+    "wind": (
+        "wind_speed_ms",
+        "wind_speed_kmh",
+        "wind_speed_mph",
+        "wind_speed_kt",
+        "wind_gust_ms",
+        "wind_gust_mph",
+        "wind_direction_deg",
+        "wind_direction_cardinal",
+    ),
+    "sky": ("cloud_cover_pct", "uv_index", "precip_mm", "visibility_m", "visibility_km"),
+}
+
+#: How each external column collapses within a bucket. Speeds mean; gusts
+#: take the peak (a mean of gusts understates the gust, which is the whole
+#: point of reporting one); bearings use a circular mean. precip_mm is a
+#: provider-reported accumulation over its own prior interval, so averaging
+#: it is meaningless — the most recent value is the honest choice.
+EXTERNAL_AGGREGATION: Mapping[str, AggPolicy] = {
+    "wind_speed_ms": "mean",
+    "wind_gust_ms": "max",
+    "wind_direction_deg": "vector_mean_deg",
+    "cloud_cover_pct": "mean",
+    "uv_index": "mean",
+    "visibility_m": "mean",
+    "precip_mm": "last",
+}
+
+
+def build_external_history_row(
+    row: sqlite3.Row | dict[str, Any],
+    include_groups: set[str],
+) -> dict[str, Any]:
+    """Map one logged/bucketed external row to the wire shape.
+
+    Storage is SI (m/s); every display unit is derived here, mirroring
+    build_external, so the dashboard never converts client-side.
+    """
+    out: dict[str, Any] = {"timestamp": datetime.fromtimestamp(int(row["timestamp"]), tz=UTC)}
+
+    ws = row["wind_speed_ms"]
+    wg = row["wind_gust_ms"]
+    wd = row["wind_direction_deg"]
+    vis = row["visibility_m"]
+
+    values: dict[str, Any] = {
+        "wind_speed_ms": _round(ws),
+        "wind_speed_kmh": _round(None if ws is None else ws * MS_TO_KMH),
+        "wind_speed_mph": _round(None if ws is None else ws * MS_TO_MPH),
+        "wind_speed_kt": _round(None if ws is None else ws * MS_TO_KT),
+        "wind_gust_ms": _round(wg),
+        "wind_gust_mph": _round(None if wg is None else wg * MS_TO_MPH),
+        "wind_direction_deg": _round(wd),
+        "wind_direction_cardinal": cardinal_from_deg(wd),
+        "cloud_cover_pct": _round(row["cloud_cover_pct"]),
+        "uv_index": _round(row["uv_index"]),
+        "precip_mm": _round(row["precip_mm"], 2),
+        "visibility_m": _round(vis, 0),
+        "visibility_km": _round(None if vis is None else vis / 1000.0, 1),
+    }
+
+    for group in ("wind", "sky"):
+        if group in include_groups:
+            for k in EXTERNAL_HISTORY_GROUPS[group]:
+                v = values.get(k)
+                if v is not None:
+                    out[k] = v
     return out

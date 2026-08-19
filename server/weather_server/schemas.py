@@ -290,6 +290,40 @@ class HistoryResponse(_StrictModel):
     )
 
 
+class ExternalHistoryRow(_StrictModel):
+    """One bucket of logged regional observations. Like HistoryRow, the
+    field set is driven by the `include` groups, so extra is allowed."""
+
+    model_config = ConfigDict(extra="allow", frozen=True)
+    timestamp: datetime
+
+
+class ExternalHistoryResponse(_StrictModel):
+    """History for the optional internet feed (EXTERNAL provenance).
+
+    `enabled` reports whether [external] is configured at all, which is a
+    durable fact about the install. An empty `rows` with enabled=true is
+    the transient "feed on, nothing logged yet" state — clients need to
+    tell those apart to decide between hiding a panel and showing a
+    no-data affordance.
+    """
+
+    from_: datetime = Field(serialization_alias="from", validation_alias="from")
+    to: datetime
+    bucket_seconds: int
+    row_count: int
+    enabled: bool
+    provider: str | None = None
+    source: str | None = None
+    rows: list[ExternalHistoryRow]
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        populate_by_name=True,
+    )
+
+
 class Stat(_StrictModel):
     min: float | None = None
     max: float | None = None
