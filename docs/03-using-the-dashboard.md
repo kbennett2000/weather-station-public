@@ -12,7 +12,7 @@ This is the end-user tour. If you've got the sensors built ([`01`](01-building-t
 
 Eleven panels in a roughly newspaper-style layout. Outdoor + Sky take the upper half because that's the most important data; the optional **Regional** panel (internet feed) sits alongside them; indoor and basement are smaller live panels; a **Derived Thermodynamics** panel carries the computed-from-local values; light, GPS, a **Today & Trends** summary, the historical chart band, and device telemetry round out the rest. The header rides at the top and the footer at the bottom — both can be customised via `branding.toml`.
 
-The full panel roster, top to bottom: **Outdoor Conditions**, **Sky & Astronomy**, **Regional Conditions** (optional internet feed), **Indoor**, **Indoor Jr** (basement), **Derived Thermodynamics**, **Light Sensor**, **Location & GPS**, **Today & Trends**, **Historical Readings**, **Device Telemetry**. Each is described below.
+The full panel roster, top to bottom: **Outdoor Conditions**, **Sky & Astronomy**, **Regional Conditions** (optional internet feed), **Indoor**, **Indoor Jr** (basement), **Derived Thermodynamics**, **Light Sensor**, **Location & GPS**, **Today & Trends**, **Historical Readings**, **Regional History** (optional internet feed), **Device Telemetry**. Each is described below.
 
 ---
 
@@ -204,7 +204,14 @@ The button bar at the top picks the window: **TODAY** (since local midnight), **
 
 ## Historical Readings
 
-This is the time-window panel. Six charts: temperature, humidity, pressure (sea-level), dew point, visible light, infrared.
+This is the time-window panel. Eight charts: temperature, humidity, pressure (sea-level), dew point, absolute humidity, density altitude, visible light, infrared.
+
+Two of those are worth a word:
+
+- **Absolute humidity** (g/m³) — how much water is actually *in* the air, as opposed to relative humidity, which only tells you how close the air is to saturation *at its current temperature*. Relative humidity swings wildly over a day while the actual moisture content barely moves; absolute humidity is the one that shows you when a genuinely wetter or drier air mass has arrived.
+- **Density altitude** (ft) — the altitude the atmosphere "thinks" it is at, given the current temperature, humidity and pressure. On a hot day at elevation it runs thousands of feet above the station's real altitude. Pilots care about it because it determines aircraft performance; on the ground it is a good single number for "how thin is the air right now".
+
+Both are computed server-side from the outdoor sensor's temperature, humidity and pressure — the same three values the panel's other charts come from — so they have full history from the moment the feature shipped, not just from that day forward.
 
 ### 1-hour window
 
@@ -239,6 +246,20 @@ The auto-bucket heuristic (`docs/design/02-api-design.md:290`):
 You can also deep-link to a specific window with `?hours=N` in the URL, e.g. `http://<host>:8005/dashboard/?hours=168` for the 7-day view.
 
 ---
+
+## Regional History
+
+The internet-feed counterpart to Historical Readings, and **only present if you have `[external]` enabled** in `weather.toml`. Four charts: wind speed, wind gust, cloud cover, UV index. It shares the time-window buttons with the panel above it, so switching to 7D moves both.
+
+It lives in its own panel rather than as extra cells in Historical Readings for a deliberate reason: everything in Historical Readings is something *your* sensors measured, and everything here came off the internet from a nearby model point or station. Mixing them would make a feed outage look like a sensor failure. The panel header names the provider so you can always tell where the numbers came from.
+
+Three things will look odd at first and are all working as intended:
+
+- **The panel is missing entirely** if the feed is off. That is not an error state — an offline station simply doesn't have this data, so there is nothing to show and nothing to explain.
+- **It says NO DATA and looks dimmed** if the feed is on but hasn't logged at least two observations yet. A single point can't draw a line.
+- **The series is sparse, and starts empty.** There is no backfill: nothing was recorded before this feature existed, so the charts fill in going forward. And although the server fetches every 5 minutes, it only *stores* an observation when the provider actually publishes a new one — which for both NWS and Open-Meteo is roughly hourly. So expect about one point per hour, not twelve. A 7-day window will look thin for the first week.
+
+Gusts are aggregated as the **peak** within each bucket rather than the average, since an averaged gust isn't a gust. Wind direction, where it appears, uses a circular mean — averaging 350° and 10° as plain numbers would give you 180°, pointing due south when the wind is out of the north.
 
 ## Device Telemetry
 
@@ -320,7 +341,8 @@ Everything you see on the dashboard, plus more, is available as JSON from the se
 |---|---|
 | `GET /api/v1/current` | Latest reading from every sensor + the full astronomy block + the optional `external` block (null when the internet feed is off) |
 | `GET /api/v1/current/{sensor_id}` | One sensor's latest reading + astronomy + `external` |
-| `GET /api/v1/history/outdoor` | Time-bucketed outdoor history (the chart data). Window via `?hours=` or explicit `?from=&to=` (ISO 8601) |
+| `GET /api/v1/history/outdoor` | Time-bucketed outdoor history (the chart data). Window via `?hours=` or explicit `?from=&to=` (ISO 8601). Add `?include=thermo` for absolute humidity and density altitude |
+| `GET /api/v1/external/history` | Time-bucketed regional history (wind, gust, cloud, UV). Returns `enabled: false` with no rows when the internet feed is off |
 | `GET /api/v1/summary/outdoor` | Windowed history summary: hi/lo/avg, pressure tendency, degree days, DLI, ET₀ (`?period=today\|24h\|7d\|30d`) |
 | `GET /api/v1/external` | The internet-sourced regional block alone: wind, cloud, UV, precip, visibility + fused comfort indices (null when offline) |
 | `GET /api/v1/sensors` | Sensors registered with the server + their status |

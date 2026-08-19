@@ -24,7 +24,7 @@ The following are settled. If you believe one is wrong, **surface it as a questi
 
 - **Forecasting is removed.** No prediction, no analysis tabs, no `weatherAnalysis.js`.
 - **Storage:** SQLite (WAL mode), single file, greenfield. No MySQL/MariaDB.
-- **Logged data:** outdoor sensor only. Indoor and basement are live-only (current readings via API poll, no history retained).
+- **Logged data:** outdoor sensor only, plus — when `[external]` is enabled — the internet feed's observations in a separate `external_readings` table (see ADR-0003). Indoor and basement remain live-only (current readings via API poll, no history retained).
 - **Server framework:** FastAPI.
 - **Config format:** TOML, parsed with stdlib `tomllib`.
 - **Derived values:** computed server-side at read time. DB stores raw readings only.
@@ -61,7 +61,9 @@ weather-station-public/
 │   │   ├── 01-findings.md
 │   │   └── 02-api-design.md
 │   ├── adr/                     # Architecture Decision Records
-│   │   └── 0001-optional-internet-external-data-feed.md
+│   │   ├── 0001-optional-internet-external-data-feed.md
+│   │   ├── 0002-internet-optional-dashboard-ux.md
+│   │   └── 0003-persist-external-observations-for-regional-history.md
 │   ├── images/
 │   ├── phase2-verification.md   # On-hardware verification checklists
 │   └── phase5-verification.md
@@ -71,6 +73,7 @@ weather-station-public/
 │   │   ├── main.py
 │   │   ├── config.py
 │   │   ├── db.py
+│   │   ├── bucketing.py         # shared history windowing/aggregation
 │   │   ├── cache.py
 │   │   ├── logger_task.py
 │   │   ├── sensors.py

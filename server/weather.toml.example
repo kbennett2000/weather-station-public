@@ -38,6 +38,12 @@ fixture_dir = "fixtures"
 # fetch: which fields to request (open-meteo supports all of these).
 # cross_check: compare the model vs the nearest NWS station and flag
 #   confidence = "low" when they diverge sharply.
+#
+# Enabling this also LOGS each observation to the external_readings table,
+# which is what feeds the dashboard's Regional History panel (ADR-0003).
+# Rows are deduped on the provider's own observation time, so the table
+# grows at the provider's update rate (~hourly) rather than once per
+# refresh_interval_seconds. Disabling the feed stops all writes.
 [external]
 enabled = true
 provider = "open-meteo"

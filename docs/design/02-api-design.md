@@ -316,7 +316,7 @@ Only `outdoor` is currently logged (see `server/weather_server/db.py`). Calls wi
 | `from` | ISO 8601 | — | Start of window |
 | `to` | ISO 8601 | `now` | End of window |
 | `bucket` | enum | `auto` | `raw`, `60`, `300`, `900`, `3600`, `auto` (server picks based on range) |
-| `include` | csv | `weather` | `weather`, `light`, `location`, `device` — selects which field groups appear in rows |
+| `include` | csv | `weather` | `weather`, `thermo`, `light`, `location`, `device` — selects which field groups appear in rows |
 
 **`bucket=auto` heuristic:**
 
@@ -367,6 +367,7 @@ The field groups are:
 | Group | Fields |
 |---|---|
 | `weather` | `temperature_c`, `temperature_f`, `humidity_pct`, `pressure_station_hpa`, `pressure_sealevel_hpa`, `dewpoint_c` |
+| `thermo` | `absolute_humidity_g_m3`, `density_altitude_m`, `density_altitude_ft` |
 | `light` | `lux`, `ir`, `visible`, `full` |
 | `location` | `lat`, `lon`, `altitude_m`, `satellites`, `maidenhead` |
 | `device` | `rssi_dbm`, `uptime_s`, `free_heap_bytes` |
@@ -709,3 +710,84 @@ API implications, reflected in the endpoint specs below:
 - `/api/v1/sensors` includes a per-sensor `logged: bool` field so consumers know whether history is available for that sensor.
 - `/api/v1/health.loggers` contains exactly one entry (`outdoor`).
 - `/api/v1/current` continues to return all three sensors. The outdoor reading comes from the DB (latest row); the indoor and basement readings come from live polls of those sensors.
+
+---
+
+## `GET /api/v1/external/history`
+
+History for the optional internet feed (**EXTERNAL** provenance). Serves the
+`external_readings` table written by the background fetch task — see
+`docs/adr/0003-persist-external-observations-for-regional-history.md`.
+
+It deliberately does **not** live at `/api/v1/history/external`: that path belongs
+to `/api/v1/history/{sensor_id}`, which resolves the segment against the configured
+sensors, and the feed is not a sensor. Nor is wind offered as an `include` group on
+the outdoor history route — that would put an internet-model value inside a row of
+local sensor readings, which is exactly the provenance mixing ADR-0001 and ADR-0002
+rule out.
+
+**Query params** — identical semantics to `/api/v1/history/{sensor_id}`, including
+the same `bucket=auto` heuristic:
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `hours` | int | `24` | Time window (mutually exclusive with `from`/`to`) |
+| `from` | ISO 8601 | — | Start of window |
+| `to` | ISO 8601 | `now` | End of window |
+| `bucket` | enum | `auto` | `raw`, `60`, `300`, `900`, `3600`, `auto` |
+| `include` | csv | `wind` | `wind`, `sky` |
+
+| Group | Fields |
+|---|---|
+| `wind` | `wind_speed_ms`, `wind_speed_kmh`, `wind_speed_mph`, `wind_speed_kt`, `wind_gust_ms`, `wind_gust_mph`, `wind_direction_deg`, `wind_direction_cardinal` |
+| `sky` | `cloud_cover_pct`, `uv_index`, `precip_mm`, `visibility_m`, `visibility_km` |
+
+**Response 200:**
+
+```json
+{
+  "from": "2026-08-18T23:43:09Z",
+  "to":   "2026-08-19T23:43:09Z",
+  "bucket_seconds": 300,
+  "row_count": 24,
+  "enabled": true,
+  "provider": "open-meteo",
+  "source": "open-meteo:best_match",
+  "rows": [
+    {
+      "timestamp": "2026-08-19T23:45:00Z",
+      "wind_speed_ms": 4.0,
+      "wind_speed_kmh": 14.4,
+      "wind_speed_mph": 9.0,
+      "wind_speed_kt": 7.8,
+      "wind_gust_ms": 7.6,
+      "wind_gust_mph": 16.9,
+      "wind_direction_deg": 142.5,
+      "wind_direction_cardinal": "SE"
+    }
+  ]
+}
+```
+
+**A disabled feed returns 200, not 404** — with `enabled: false`, `row_count: 0`
+and `rows: []`. Absence of internet is a normal state for this project, and a 404
+would be indistinguishable client-side from a bad URL. The `enabled` flag lets a
+consumer separate the durable "this install has no feed" from the transient "feed
+is on but nothing is logged yet": the dashboard hides its Regional History panel
+for the first and shows a NO DATA affordance for the second.
+
+**Bucket aggregation differs from the outdoor route**, because the quantities do:
+
+| Field | Policy | Why |
+|---|---|---|
+| `wind_speed_ms`, `cloud_cover_pct`, `uv_index`, `visibility_m` | mean | Continuous quantities. |
+| `wind_gust_ms` | **max** | A mean of gusts understates the gust, which is the whole point of reporting one. |
+| `wind_direction_deg` | **circular mean** | Bearings do not average as scalars — 350° and 10° average to 180°, due south instead of north. Unit-vector mean, unweighted by speed; null when the vectors cancel. |
+| `precip_mm` | most-recent | A provider-reported accumulation over its own prior interval; averaging it is meaningless. |
+| `provider`, `source`, `station_id`, `confidence` | most-recent | Discrete/state values. |
+
+> **Sample density is the provider's, not the refresh interval's.** The fetch task
+> runs every ~300s, but rows are deduped on the provider's `observed_at`, and both
+> NWS stations and Open-Meteo model output update roughly hourly. Expect about one
+> row per hour. There is also **no backfill** — the series starts empty on the day
+> the feature ships.
