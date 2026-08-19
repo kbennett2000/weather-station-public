@@ -456,6 +456,14 @@ HISTORY_GROUPS = {
         "pressure_sealevel_hpa",
         "dewpoint_c",
     ),
+    # Extended thermodynamics. Opt-in rather than folded into `weather`
+    # because `weather` is the default include — growing it would change
+    # every existing caller's payload with no way to opt out.
+    "thermo": (
+        "absolute_humidity_g_m3",
+        "density_altitude_m",
+        "density_altitude_ft",
+    ),
     "light": ("lux", "ir", "visible", "full"),
     "location": ("lat", "lon", "altitude_m", "satellites", "maidenhead"),
     "device": ("rssi_dbm", "uptime_s", "free_heap_bytes"),
@@ -477,11 +485,15 @@ def build_history_row(
 
     out: dict[str, Any] = {"timestamp": ts}
 
-    if "weather" in include_groups:
-        for k in HISTORY_GROUPS["weather"]:
-            v = derived.get(k) if k in derived else payload.get(k)
-            if v is not None:
-                out[k] = v
+    # Both groups are flat lists of derived keys, so one loop covers them.
+    # Values are derived from the bucket means, not meaned after deriving —
+    # the difference is far below display precision over a single bucket.
+    for group in ("weather", "thermo"):
+        if group in include_groups:
+            for k in HISTORY_GROUPS[group]:
+                v = derived.get(k) if k in derived else payload.get(k)
+                if v is not None:
+                    out[k] = v
 
     if "light" in include_groups:
         # `full_spectrum` in payload maps to `full` in the row.

@@ -5,8 +5,10 @@ resolver's fallback paths.
 
 from datetime import UTC, datetime
 
+import pytest
+
 from weather_server.config import load_config_from_dict
-from weather_server.responses import build_astronomy
+from weather_server.responses import build_astronomy, build_history_row
 
 
 def _config(outdoor: dict) -> object:
@@ -146,3 +148,73 @@ def test_sun_and_moon_events_are_emitted_in_resolved_local_zone() -> None:
         assert dt.utcoffset().total_seconds() in (-6 * 3600, -7 * 3600), (
             f"event {dt.isoformat()} not projected into America/Denver"
         )
+
+
+# ── history rows: the thermo include group ─────────────────────────────────
+
+
+def _outdoor_sensor() -> object:
+    config = load_config_from_dict(
+        {
+            "sensors": [
+                {
+                    "id": "outdoor",
+                    "role": "outdoor",
+                    "ip": "1.1.1.1",
+                    "has_gps": True,
+                    "temp_offset_c": 0.0,
+                    "fallback_altitude_m": 1609.3,
+                }
+            ]
+        }
+    )
+    return config.sensor_by_id("outdoor")
+
+
+# A warm Denver-elevation reading: 25 C, 30% RH, 847.25 hPa station pressure.
+_DENVER_ROW = {
+    "timestamp": 1_750_000_000,
+    "temperature_c": 25.0,
+    "humidity_pct": 30.0,
+    "pressure_pa": 84725.0,
+    "altitude_m": 1609.3,
+}
+
+
+def test_history_row_thermo_group_emits_absolute_humidity_and_density_altitude() -> None:
+    out = build_history_row(dict(_DENVER_ROW), _outdoor_sensor(), {"weather", "thermo"})
+    assert out["absolute_humidity_g_m3"] == pytest.approx(6.9, abs=0.3)
+    # Hot and high: density altitude sits well above the 1609 m station
+    # altitude. That relationship is the physically meaningful assertion.
+    assert out["density_altitude_m"] > 1609.3
+    assert out["density_altitude_ft"] == pytest.approx(out["density_altitude_m"] * 3.280839895)
+
+
+def test_history_row_thermo_absent_by_default() -> None:
+    out = build_history_row(dict(_DENVER_ROW), _outdoor_sensor(), {"weather"})
+    assert "temperature_c" in out
+    assert "absolute_humidity_g_m3" not in out
+    assert "density_altitude_m" not in out
+
+
+def test_history_row_thermo_alone_omits_weather_fields() -> None:
+    out = build_history_row(dict(_DENVER_ROW), _outdoor_sensor(), {"thermo"})
+    assert "absolute_humidity_g_m3" in out
+    assert "temperature_c" not in out
+
+
+def test_history_row_thermo_omits_density_altitude_without_pressure() -> None:
+    # derive_reading cascades None; build_history_row skips None, so the key
+    # must be absent rather than present-and-null.
+    row = {k: v for k, v in _DENVER_ROW.items() if k != "pressure_pa"}
+    out = build_history_row(row, _outdoor_sensor(), {"thermo"})
+    assert "density_altitude_m" not in out
+    # Absolute humidity needs only temperature and humidity, so it survives.
+    assert "absolute_humidity_g_m3" in out
+
+
+def test_history_row_thermo_omits_everything_without_humidity() -> None:
+    row = {k: v for k, v in _DENVER_ROW.items() if k != "humidity_pct"}
+    out = build_history_row(row, _outdoor_sensor(), {"thermo"})
+    assert "absolute_humidity_g_m3" not in out
+    assert "density_altitude_m" not in out

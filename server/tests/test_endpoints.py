@@ -113,6 +113,25 @@ def test_history_include_light_adds_lux(client: TestClient) -> None:
         assert "lux" in sample
 
 
+def test_history_include_thermo_adds_derived_fields(client: TestClient) -> None:
+    r = client.get("/api/v1/history/outdoor?hours=24&include=weather,thermo")
+    assert r.status_code == 200
+    parsed = schemas.HistoryResponse.model_validate(r.json())
+    assert parsed.rows, "fixture history should not be empty"
+    sample = parsed.rows[0].model_dump()
+    assert "absolute_humidity_g_m3" in sample
+    assert "density_altitude_m" in sample
+    assert "density_altitude_ft" in sample
+
+
+def test_history_thermo_absent_from_default_include(client: TestClient) -> None:
+    r = client.get("/api/v1/history/outdoor?hours=24")
+    assert r.status_code == 200
+    parsed = schemas.HistoryResponse.model_validate(r.json())
+    assert parsed.rows, "fixture history should not be empty"
+    assert "absolute_humidity_g_m3" not in parsed.rows[0].model_dump()
+
+
 def test_history_indoor_returns_404_history_not_available(client: TestClient) -> None:
     r = client.get("/api/v1/history/indoor")
     assert r.status_code == 404
