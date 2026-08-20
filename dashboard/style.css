@@ -793,6 +793,30 @@ body::after {
   position: relative;
 }
 
+/* Window extremes under each plot. space-between across three children puts
+   MIN left, AVG centred and MAX right without any explicit widths, which is
+   what keeps it legible in the narrow cells of the 4-up regional grid. */
+.chart-cell-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-cell-foot span::before {
+  color: var(--label);
+  margin-right: 5px;
+  letter-spacing: 0.12em;
+}
+
+.chart-cell-foot span:nth-child(1)::before { content: 'MIN'; }
+.chart-cell-foot span:nth-child(2)::before { content: 'AVG'; }
+.chart-cell-foot span:nth-child(3)::before { content: 'MAX'; }
+
 /* DEVICE TELEMETRY */
 
 .telemetry-grid {

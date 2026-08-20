@@ -802,25 +802,34 @@ function lineConfig(color, fill, unit, digits) {
 // so adding a chart is one entry rather than four edits scattered across
 // two files.
 const HISTORY_CHARTS = [
-  { key: 'temp',   canvas: 'chartTemp',   label: 'chart-cur-temp',   color: AMBER, fill: AMBER_DIM, unit: '°F',   digits: 1, value: r => cToF(r.temperature_c) },
-  { key: 'hum',    canvas: 'chartHum',    label: 'chart-cur-hum',    color: CYAN,  fill: CYAN_DIM,  unit: '%',    digits: 1, value: r => r.humidity_pct },
-  { key: 'press',  canvas: 'chartPress',  label: 'chart-cur-press',  color: AMBER, fill: AMBER_DIM, unit: 'inHg', digits: 2, value: r => hpaToInHg(r.pressure_sealevel_hpa) },
-  { key: 'dew',    canvas: 'chartDew',    label: 'chart-cur-dew',    color: CYAN,  fill: CYAN_DIM,  unit: '°F',   digits: 1, value: r => cToF(r.dewpoint_c) },
-  { key: 'abshum', canvas: 'chartAbsHum', label: 'chart-cur-abshum', color: AMBER, fill: AMBER_DIM, unit: 'g/m³', digits: 1, value: r => r.absolute_humidity_g_m3 },
-  { key: 'densalt',canvas: 'chartDensAlt',label: 'chart-cur-densalt',color: CYAN,  fill: CYAN_DIM,  unit: 'ft',   digits: 0, value: r => r.density_altitude_ft },
-  { key: 'vis',    canvas: 'chartVis',    label: 'chart-cur-vis',    color: AMBER, fill: AMBER_DIM, unit: '',     digits: 0, value: r => r.visible },
-  { key: 'ir',     canvas: 'chartIR',     label: 'chart-cur-ir',     color: CYAN,  fill: CYAN_DIM,  unit: '',     digits: 0, value: r => r.ir },
+  { key: 'temp',   canvas: 'chartTemp',   color: AMBER, fill: AMBER_DIM, unit: '°F',   digits: 1, value: r => cToF(r.temperature_c) },
+  { key: 'hum',    canvas: 'chartHum',    color: CYAN,  fill: CYAN_DIM,  unit: '%',    digits: 1, value: r => r.humidity_pct },
+  { key: 'press',  canvas: 'chartPress',  color: AMBER, fill: AMBER_DIM, unit: 'inHg', digits: 2, value: r => hpaToInHg(r.pressure_sealevel_hpa) },
+  { key: 'dew',    canvas: 'chartDew',    color: CYAN,  fill: CYAN_DIM,  unit: '°F',   digits: 1, value: r => cToF(r.dewpoint_c) },
+  { key: 'abshum', canvas: 'chartAbsHum', color: AMBER, fill: AMBER_DIM, unit: 'g/m³', digits: 1, value: r => r.absolute_humidity_g_m3 },
+  { key: 'densalt',canvas: 'chartDensAlt',color: CYAN,  fill: CYAN_DIM,  unit: 'ft',   digits: 0, value: r => r.density_altitude_ft },
+  { key: 'vis',    canvas: 'chartVis',    color: AMBER, fill: AMBER_DIM, unit: '',     digits: 0, value: r => r.visible },
+  { key: 'ir',     canvas: 'chartIR',     color: CYAN,  fill: CYAN_DIM,  unit: '',     digits: 0, value: r => r.ir },
 ];
 
 // The regional series comes from the optional internet feed, so it lives in
 // its own panel and its own fetch — mixing EXTERNAL provenance into the
 // local-sensor charts is what ADR-0002 rules out.
 const REGIONAL_CHARTS = [
-  { key: 'wind',  canvas: 'chartWind',  label: 'chart-cur-wind',  color: AMBER, fill: AMBER_DIM, unit: 'mph', digits: 1, value: r => r.wind_speed_mph },
-  { key: 'gust',  canvas: 'chartGust',  label: 'chart-cur-gust',  color: CYAN,  fill: CYAN_DIM,  unit: 'mph', digits: 1, value: r => r.wind_gust_mph },
-  { key: 'cloud', canvas: 'chartCloud', label: 'chart-cur-cloud', color: AMBER, fill: AMBER_DIM, unit: '%',   digits: 0, value: r => r.cloud_cover_pct },
-  { key: 'uv',    canvas: 'chartUV',    label: 'chart-cur-uv',    color: CYAN,  fill: CYAN_DIM,  unit: '',    digits: 1, value: r => r.uv_index },
+  { key: 'wind',  canvas: 'chartWind',  color: AMBER, fill: AMBER_DIM, unit: 'mph', digits: 1, value: r => r.wind_speed_mph },
+  { key: 'gust',  canvas: 'chartGust',  color: CYAN,  fill: CYAN_DIM,  unit: 'mph', digits: 1, value: r => r.wind_gust_mph },
+  { key: 'cloud', canvas: 'chartCloud', color: AMBER, fill: AMBER_DIM, unit: '%',   digits: 0, value: r => r.cloud_cover_pct },
+  { key: 'uv',    canvas: 'chartUV',    color: CYAN,  fill: CYAN_DIM,  unit: '',    digits: 1, value: r => r.uv_index },
 ];
+
+// The four readouts on a chart cell — current value in the head, min/avg/max
+// in the foot — all key off the spec's `key`, so a new chart needs no id
+// bookkeeping beyond matching ids in index.html.
+const CELL_READOUTS = ['cur', 'min', 'avg', 'max'];
+
+function cellId(kind, key) {
+  return `chart-${kind}-${key}`;
+}
 
 // Shared by the hover tooltip and the per-chart header readout so the two
 // can never drift. digits === 0 means "integer with thousands separators".
@@ -828,6 +837,34 @@ function fmtChartValue(v, unit, digits) {
   if (v === null || v === undefined) return '--';
   const num = digits === 0 ? Math.round(v).toLocaleString() : v.toFixed(digits);
   return unit ? `${num} ${unit}` : num;
+}
+
+// Min/avg/max over the series as plotted. Nulls are dropped here exactly as
+// pushSeries drops them, so every number in the cell foot names a point that
+// is actually on the line — hovering the visible peak gives you MAX.
+//
+// Two honest limits, both inherited from the plotted series rather than
+// introduced here: above a 1-hour window the points are bucket means, so MAX
+// is the largest bucket average and not the true instantaneous peak; and AVG
+// is the mean of those points, not time-weighted — an empty bucket is absent
+// rather than null, so a logging gap tilts it slightly.
+//
+// Explicit loop rather than Math.min(...values): the 1H window is unbucketed
+// and can run to thousands of points, which is enough to blow the argument
+// limit on a spread.
+function seriesStats(values) {
+  let min = null;
+  let max = null;
+  let sum = 0;
+  let n = 0;
+  for (const v of values) {
+    if (v === null || v === undefined || !Number.isFinite(v)) continue;
+    if (min === null || v < min) min = v;
+    if (max === null || v > max) max = v;
+    sum += v;
+    n++;
+  }
+  return n ? { min, max, avg: sum / n } : null;
 }
 
 function buildCharts(specs) {
@@ -839,14 +876,23 @@ function buildCharts(specs) {
 }
 
 // Push one set of rows through a spec list: series into the chart, last
-// sample into the cell's header readout.
+// sample into the cell's header readout, window extremes into its foot.
 function applyChartData(specs, rows, times) {
   const last = rows[rows.length - 1] || {};
   for (const spec of specs) {
     const chart = charts[spec.key];
     if (!chart) continue;
-    pushSeries(chart, rows.map(spec.value), times);
-    setText(spec.label, fmtChartValue(spec.value(last), spec.unit, spec.digits));
+    const series = rows.map(spec.value);
+    pushSeries(chart, series, times);
+    setText(cellId('cur', spec.key), fmtChartValue(spec.value(last), spec.unit, spec.digits));
+
+    // The foot omits the unit — it is already stated in the head readout
+    // directly above, and repeating it three more times crowds the narrow
+    // cells in the 4-up regional grid.
+    const stats = seriesStats(series);
+    for (const kind of ['min', 'avg', 'max']) {
+      setText(cellId(kind, spec.key), stats ? fmtChartValue(stats[kind], '', spec.digits) : '--');
+    }
   }
 }
 
@@ -926,7 +972,11 @@ function setRegionalHistState(panel, state) {
   setLed('led-regional-hist', ok ? 'on' : 'off');
   if (!ok) {
     setText('regional-hist-source', 'awaiting data');
-    REGIONAL_CHARTS.forEach(spec => setText(spec.label, '--'));
+    // Blank every readout rather than leaving the last-good numbers frozen
+    // under an empty chart.
+    REGIONAL_CHARTS.forEach(spec => {
+      CELL_READOUTS.forEach(kind => setText(cellId(kind, spec.key), '--'));
+    });
   }
 }
 
