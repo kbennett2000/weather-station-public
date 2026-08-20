@@ -10,7 +10,7 @@ This is the end-user tour. If you've got the sensors built ([`01`](01-building-t
 
 ![Full dashboard](images/01-dashboard-full.png)
 
-Eleven panels in a roughly newspaper-style layout. Outdoor + Sky take the upper half because that's the most important data; the optional **Regional** panel (internet feed) sits alongside them; indoor and basement are smaller live panels; a **Derived Thermodynamics** panel carries the computed-from-local values; light, GPS, a **Today & Trends** summary, the historical chart band, and device telemetry round out the rest. The header rides at the top and the footer at the bottom — both can be customised via `branding.toml`.
+Twelve panels in a roughly newspaper-style layout. Outdoor + Sky take the upper half because that's the most important data; the optional **Regional** panel (internet feed) sits alongside them; indoor and basement are smaller live panels; a **Derived Thermodynamics** panel carries the computed-from-local values; light, GPS, a **Today & Trends** summary, the historical chart band, and device telemetry round out the rest. The header rides at the top and the footer at the bottom — both can be customised via `branding.toml`.
 
 The full panel roster, top to bottom: **Outdoor Conditions**, **Sky & Astronomy**, **Regional Conditions** (optional internet feed), **Indoor**, **Indoor Jr** (basement), **Derived Thermodynamics**, **Light Sensor**, **Location & GPS**, **Today & Trends**, **Historical Readings**, **Regional History** (optional internet feed), **Device Telemetry**. Each is described below.
 
@@ -213,6 +213,16 @@ Two of those are worth a word:
 
 Both are computed server-side from the outdoor sensor's temperature, humidity and pressure — the same three values the panel's other charts come from — so they have full history from the moment the feature shipped, not just from that day forward.
 
+### Reading the numbers on a chart
+
+Each chart carries four readouts. The one in the header, top-right, is the **latest** value — the right-hand end of the line. The dim strip along the bottom gives **MIN**, **AVG** and **MAX** for the window you're currently looking at, so switching from 24H to 7D rewrites all three.
+
+The footer numbers omit the unit, because the header directly above already states it.
+
+These are the extremes *of the plotted line*, which is worth knowing when the window is bucketed. At 1H you're seeing raw readings, so MAX is a true instantaneous peak. At 24H each point is a 5-minute average and at 7D a 30-minute average, so MAX is the highest *bucket average* — a brief spike gets smoothed into its neighbours and reads lower than it really was. The effect is most obvious on the light charts, where a few minutes of direct sun can be flattened by the surrounding shade. This is not the readout disagreeing with the chart; it is the chart itself, and the readout matching it. If you want the true extreme over a period, the **Today & Trends** panel computes its highs and lows from raw rows.
+
+For the same reason, AVG is the mean of the plotted points rather than a time-weighted mean. Buckets with no logged readings are simply absent, so a gap in logging gives the surviving buckets slightly more weight than clock time would. On a dashboard this is a rounding-error concern, not a real one.
+
 ### 1-hour window
 
 ![1H](images/09-charts-1h.png)
@@ -260,6 +270,8 @@ Three things will look odd at first and are all working as intended:
 - **The series is sparse, and starts empty.** There is no backfill: nothing was recorded before this feature existed, so the charts fill in going forward. And although the server fetches every 5 minutes, it only *stores* an observation when the provider actually publishes a new one — which for both NWS and Open-Meteo is roughly hourly. So expect about one point per hour, not twelve. A 7-day window will look thin for the first week.
 
 Gusts are aggregated as the **peak** within each bucket rather than the average, since an averaged gust isn't a gust. Wind direction, where it appears, uses a circular mean — averaging 350° and 10° as plain numbers would give you 180°, pointing due south when the wind is out of the north.
+
+Each chart carries the same MIN / AVG / MAX footer as the Historical Readings panel above it, computed the same way and with the same bucketing caveat. Note that it interacts with the gust rule: because gusts bucket to the peak, the MAX under the gust chart is a genuine peak-of-peaks, while the MIN is the *lowest* bucket peak — not the calmest instant in the window.
 
 ## Device Telemetry
 
