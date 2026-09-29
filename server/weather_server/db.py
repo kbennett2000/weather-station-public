@@ -25,6 +25,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from .plausibility import PLAUSIBLE_RANGES
+
 log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 2
@@ -178,6 +180,23 @@ OUTDOOR_COLUMNS = (
 )
 
 
+def _plausible_column(col: str) -> str:
+    bounds = PLAUSIBLE_RANGES.get(col)
+    if bounds is None:
+        return col
+    lo, hi = bounds
+    return f"CASE WHEN {col} BETWEEN {lo} AND {hi} THEN {col} END AS {col}"
+
+
+# Rows on disk stay raw; an out-of-range stored value reads back as NULL
+# (ADR-0004). Same columns, same order, as SELECT *.
+_OUTDOOR_SELECT = (
+    "SELECT id, "
+    + ", ".join(_plausible_column(c) for c in OUTDOOR_COLUMNS)
+    + " FROM outdoor_readings"
+)
+
+
 def insert_outdoor_reading(
     conn: sqlite3.Connection,
     timestamp: int,
@@ -201,7 +220,7 @@ def insert_outdoor_reading(
 def latest_outdoor_reading(conn: sqlite3.Connection) -> sqlite3.Row | None:
     """Return the most recent row, or None if the table is empty."""
     row: sqlite3.Row | None = conn.execute(
-        "SELECT * FROM outdoor_readings ORDER BY timestamp DESC LIMIT 1"
+        f"{_OUTDOOR_SELECT} ORDER BY timestamp DESC LIMIT 1"
     ).fetchone()
     return row
 
@@ -211,9 +230,9 @@ def outdoor_readings_in_range(
     from_ts: int,
     to_ts: int,
 ) -> list[sqlite3.Row]:
-    """Return raw rows in [from_ts, to_ts], ordered ascending."""
+    """Return rows in [from_ts, to_ts], ordered ascending."""
     rows = conn.execute(
-        "SELECT * FROM outdoor_readings "
+        f"{_OUTDOOR_SELECT} "
         "WHERE timestamp BETWEEN ? AND ? "
         "ORDER BY timestamp ASC",
         (from_ts, to_ts),

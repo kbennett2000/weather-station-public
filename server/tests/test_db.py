@@ -85,6 +85,33 @@ def test_partial_payload_stores_nulls(conn) -> None:
     assert row["rssi_dbm"] is None
 
 
+def test_reads_treat_out_of_range_values_as_missing(conn) -> None:
+    # Rows stay raw on disk; the read side filters them (ADR-0004).
+    db.insert_outdoor_reading(
+        conn,
+        timestamp=2000,
+        payload={
+            "temperature_c": 20.0,
+            "pressure_pa": 5000.0,
+            "latitude": 1000.0,
+            "longitude": 1000.0,
+            "altitude_m": 10_000_000.0,
+            "satellites": 255,
+        },
+    )
+    rows = [db.latest_outdoor_reading(conn), *db.outdoor_readings_in_range(conn, 0, 3000)]
+    assert len(rows) == 2
+    for row in rows:
+        assert row is not None
+        assert row["timestamp"] == 2000
+        assert row["temperature_c"] == pytest.approx(20.0)
+        for col in ("pressure_pa", "latitude", "longitude", "altitude_m", "satellites"):
+            assert row[col] is None, f"{col} should read back as missing"
+
+    stored = conn.execute("SELECT altitude_m FROM outdoor_readings").fetchone()
+    assert stored["altitude_m"] == pytest.approx(10_000_000.0)
+
+
 def test_db_ok(conn) -> None:
     assert db.db_ok(conn) is True
 

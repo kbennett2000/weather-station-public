@@ -23,12 +23,12 @@ Wire-format quirks the adapter absorbs:
    The adapter derives `full_spectrum = visible + ir` when both are
    present; otherwise leaves it None.
 
-4. **TinyGPS "invalid" sentinels before the first fix.** After a cold
-   boot, until the receiver locks, TinyGPS reports lat/lon 1000,
-   altitude 10,000,000 m, speed 18,500,000 km/h, course 10,000,000° and
-   255 satellites, and pre-fix firmware passes them straight through.
-   Any GPS field outside its physical range (`_GPS_RANGES`) is dropped
-   so a bogus position never reaches the DB.
+4. **Out-of-range values.** The notable case is TinyGPS's "invalid"
+   sentinels before the first fix after a cold boot (lat/lon 1000,
+   altitude 10,000,000 m, 255 satellites), which pre-fix firmware passes
+   straight through. Every field outside its physical range in
+   `plausibility.PLAUSIBLE_RANGES` is dropped so it never reaches the DB
+   or the live readings (ADR-0004).
 
 Error envelopes (`{"error": "..."}`) are translated to a poll result of
 None — the same as a network failure.
@@ -42,19 +42,11 @@ import math
 import re
 from typing import Any
 
+from .plausibility import drop_implausible
+
 log = logging.getLogger(__name__)
 
 _NAN_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_])(nan|NaN|NAN|undefined)(?![A-Za-z0-9_])")
-
-# Physically plausible bounds for each GPS payload field. See quirk 4.
-_GPS_RANGES: dict[str, tuple[float, float]] = {
-    "latitude": (-90.0, 90.0),
-    "longitude": (-180.0, 180.0),
-    "altitude_m": (-500.0, 9000.0),
-    "speed_kmh": (0.0, 1000.0),
-    "course_deg": (0.0, 360.0),
-    "satellites": (0, 64),
-}
 
 
 def sanitize_nan_tokens(text: str) -> str:
@@ -109,18 +101,20 @@ def _outdoor_to_payload(raw: dict[str, Any]) -> dict[str, Any]:
     _put_int(payload, "ir", raw.get("ir"))
     _put_int(payload, "visible", raw.get("visible"))
 
-    ir = payload.get("ir")
-    visible = payload.get("visible")
-    if ir is not None and visible is not None:
-        payload["full_spectrum"] = int(ir) + int(visible)
-
     _put_float(payload, "latitude", raw.get("latitude"))
     _put_float(payload, "longitude", raw.get("longitude"))
     _put_float(payload, "altitude_m", raw.get("altitude"))
     _put_float(payload, "speed_kmh", raw.get("speed"))
     _put_float(payload, "course_deg", raw.get("course"))
     _put_int(payload, "satellites", raw.get("satellites"))
-    _drop_out_of_range_gps(payload)
+
+    # Before deriving full_spectrum, so a refused ir/visible can't leak into it.
+    drop_implausible(payload)
+
+    ir = payload.get("ir")
+    visible = payload.get("visible")
+    if ir is not None and visible is not None:
+        payload["full_spectrum"] = int(ir) + int(visible)
 
     _put_int(payload, "rssi_dbm", raw.get("rssi"))
     uptime_ms = _clean_int(raw.get("uptime"))
@@ -131,17 +125,6 @@ def _outdoor_to_payload(raw: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def _drop_out_of_range_gps(payload: dict[str, Any]) -> None:
-    dropped = []
-    for key, (lo, hi) in _GPS_RANGES.items():
-        value = payload.get(key)
-        if value is not None and not lo <= value <= hi:
-            dropped.append(f"{key}={value}")
-            del payload[key]
-    if dropped:
-        log.info("dropped out-of-range GPS fields (no fix yet?): %s", ", ".join(dropped))
-
-
 def _indoor_to_payload(raw: dict[str, Any]) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     _put_float(payload, "temperature_c", raw.get("temperatureC"))
@@ -149,6 +132,7 @@ def _indoor_to_payload(raw: dict[str, Any]) -> dict[str, Any]:
     pressure_hpa = _clean_float(raw.get("pressure"))
     if pressure_hpa is not None:
         payload["pressure_pa"] = pressure_hpa * 100.0
+    drop_implausible(payload)
 
     _put_int(payload, "rssi_dbm", raw.get("rssi"))
     uptime_ms = _clean_int(raw.get("uptime"))

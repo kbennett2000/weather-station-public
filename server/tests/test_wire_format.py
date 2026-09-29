@@ -95,6 +95,28 @@ def test_parse_outdoor_partial_fix_keeps_valid_gps_fields() -> None:
     assert "satellites" not in payload
 
 
+def test_parse_outdoor_drops_out_of_range_weather_fields() -> None:
+    payload = wire_format.parse_outdoor(
+        '{"temperatureC": 20.0, "humidity": 140.0, "pressure": 5.0, "lux": 500.0,'
+        ' "ir": 70000, "visible": 100}'
+    )
+    assert payload is not None
+    assert payload["temperature_c"] == pytest.approx(20.0)
+    assert payload["lux"] == pytest.approx(500.0)
+    assert payload["visible"] == 100
+    for refused in ("humidity_pct", "pressure_pa", "ir"):
+        assert refused not in payload
+    # full_spectrum is visible + ir; with ir refused it can't be derived.
+    assert "full_spectrum" not in payload
+
+
+def test_parse_indoor_drops_out_of_range_fields() -> None:
+    payload = wire_format.parse_indoor(
+        '{"temperatureC": -120.0, "humidity": 45.0, "pressure": 2000.0}'
+    )
+    assert payload == {"humidity_pct": 45.0}
+
+
 def test_parse_outdoor_error_envelope_returns_none() -> None:
     assert wire_format.parse_outdoor(_read("outdoor_error.json")) is None
 

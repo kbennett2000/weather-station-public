@@ -63,7 +63,8 @@ weather-station-public/
 │   ├── adr/                     # Architecture Decision Records
 │   │   ├── 0001-optional-internet-external-data-feed.md
 │   │   ├── 0002-internet-optional-dashboard-ux.md
-│   │   └── 0003-persist-external-observations-for-regional-history.md
+│   │   ├── 0003-persist-external-observations-for-regional-history.md
+│   │   └── 0004-plausibility-bounds-on-sensor-readings.md
 │   ├── images/
 │   ├── phase2-verification.md   # On-hardware verification checklists
 │   └── phase5-verification.md
@@ -82,6 +83,7 @@ weather-station-public/
 │   │   ├── responses.py         # build_* response composers
 │   │   ├── branding.py          # branding.toml loader
 │   │   ├── schemas.py
+│   │   ├── plausibility.py      # physical bounds, enforced on ingest + read (ADR-0004)
 │   │   ├── external/            # OPTIONAL internet feed (EXTERNAL provenance)
 │   │   │   ├── __init__.py
 │   │   │   ├── providers.py     # open-meteo / nws / wunderground
