@@ -500,6 +500,9 @@
         <span class="led on" id="led-summary-head"></span>
         <span class="panel-head-title">Today &amp; Trends</span>
         <span class="panel-head-sub" id="summary-headsub">--</span>
+        <span class="offline-tag" id="summary-offline-tag" style="display:none">
+          <span style="width:4px;height:4px;background:currentColor;border-radius:50%"></span>NO DATA
+        </span>
       </div>
 
       <div class="window-bar" id="summary-window-bar">
@@ -544,11 +547,14 @@
     </section>
 
     <!-- CHARTS -->
-    <section class="panel panel-charts" data-code="HIST · D1">
+    <section class="panel panel-charts" data-code="HIST · D1" id="panel-hist">
       <div class="panel-head">
-        <span class="led on"></span>
+        <span class="led on" id="led-hist-head"></span>
         <span class="panel-head-title">Historical Readings</span>
         <span class="panel-head-sub" id="hist-samples">-- SAMPLES</span>
+        <span class="offline-tag" id="hist-offline-tag" style="display:none">
+          <span style="width:4px;height:4px;background:currentColor;border-radius:50%"></span>NO DATA
+        </span>
       </div>
 
       <div class="window-bar" id="window-bar">

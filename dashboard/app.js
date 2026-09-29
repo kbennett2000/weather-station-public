@@ -422,8 +422,13 @@ async function refreshCurrent() {
 
 function applyOutdoor(sr) {
   const present = !!sr;
-  setLed('led-outdoor', present && sr.online ? 'on' : (present ? 'fault' : 'off'));
-  setLed('led-outdoor-head', present && sr.online ? 'on' : (present ? 'fault' : 'off'));
+  const led = present && sr.online ? 'on' : (present ? 'fault' : 'off');
+  setLed('led-outdoor', led);
+  setLed('led-outdoor-head', led);
+  // History and summary are fed only by the outdoor logger, so their LEDs
+  // track the sensor — a window full of old rows is still a dead sensor.
+  setLed('led-hist-head', led);
+  setLed('led-summary-head', led);
   if (!present) {
     setText('outdoor-headsub', 'no data');
     return;
@@ -917,6 +922,8 @@ async function refreshHistory() {
   const rows = data.rows || [];
   setText('hist-samples', formatHistLabel(rows.length, data.bucket_seconds || 0));
   setText('tel-records', rows.length.toLocaleString());
+  // A single point draws nothing with pointRadius: 0, so treat <2 as empty.
+  setNoDataState('panel-hist', 'hist-offline-tag', rows.length < 2);
 
   // Series into the charts, last sample into each cell's header readout.
   applyChartData(HISTORY_CHARTS, rows, rows.map(r => r.timestamp));
@@ -978,6 +985,15 @@ function setRegionalHistState(panel, state) {
       CELL_READOUTS.forEach(kind => setText(cellId(kind, spec.key), '--'));
     });
   }
+}
+
+// Dim an outdoor-history panel and show its NO DATA tag when the selected
+// window holds nothing to draw. The LED is owned by applyOutdoor.
+function setNoDataState(panelId, tagId, empty) {
+  const panel = $(panelId);
+  if (panel) panel.classList.toggle('offline', empty);
+  const tag = $(tagId);
+  if (tag) tag.style.display = empty ? 'inline-flex' : 'none';
 }
 
 function formatHistLabel(count, bucketSeconds) {
@@ -1067,6 +1083,7 @@ function applySummary(s) {
   const t = s.temperature_f || {};
   const h = s.humidity_pct || {};
   setText('summary-headsub', `${(s.sample_count ?? 0).toLocaleString()} SAMPLES`);
+  setNoDataState('panel-summary', 'summary-offline-tag', !s.sample_count);
   setText('sum-temp-hi', fmt(t.max, 0));
   setText('sum-temp-lo', fmt(t.min, 0));
   setText('sum-temp-avg', fmt(t.avg, 0));
