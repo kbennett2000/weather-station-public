@@ -64,6 +64,37 @@ def test_parse_outdoor_nan_sample_drops_nan_fields() -> None:
     assert "full_spectrum" not in payload
 
 
+def test_parse_outdoor_no_fix_sample_drops_gps_sentinels() -> None:
+    # Captured from a cold boot before the GPS got its first fix: TinyGPS
+    # reports lat/lon 1000, altitude 10,000,000 m, speed 18,500,000 km/h,
+    # course 10,000,000° and 255 satellites. Logged as-is, the altitude
+    # overflowed the sea-level pressure math and 500'd every history read.
+    payload = wire_format.parse_outdoor(_read("outdoor_no_fix.json"))
+    assert payload is not None
+    gps_fields = ("latitude", "longitude", "altitude_m", "speed_kmh", "course_deg", "satellites")
+    for gps_field in gps_fields:
+        assert gps_field not in payload, f"{gps_field} sentinel should be dropped"
+    # The weather reading itself is fine and must survive.
+    assert payload["temperature_c"] == pytest.approx(12.36)
+    assert payload["humidity_pct"] == pytest.approx(100.0)
+    assert payload["pressure_pa"] == pytest.approx(80082.0)
+
+
+def test_parse_outdoor_partial_fix_keeps_valid_gps_fields() -> None:
+    # Seen in the wild: position valid, altitude and satellite count not yet.
+    payload = wire_format.parse_outdoor(
+        '{"temperatureC": 25.5, "latitude": 39.433285, "longitude": -104.518776,'
+        ' "altitude": 10000000.00, "speed": 0.78, "course": 0.00, "satellites": 255}'
+    )
+    assert payload is not None
+    assert payload["latitude"] == pytest.approx(39.433285)
+    assert payload["longitude"] == pytest.approx(-104.518776)
+    assert payload["speed_kmh"] == pytest.approx(0.78)
+    assert payload["course_deg"] == pytest.approx(0.0)
+    assert "altitude_m" not in payload
+    assert "satellites" not in payload
+
+
 def test_parse_outdoor_error_envelope_returns_none() -> None:
     assert wire_format.parse_outdoor(_read("outdoor_error.json")) is None
 

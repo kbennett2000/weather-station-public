@@ -305,11 +305,24 @@ void gpsTask(void *parameter)
 
         if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(1000)) == pdTRUE)
         {
+            // Until the first fix after a cold boot, TinyGPS returns its
+            // GPS_INVALID_* sentinels (lat/lon 1000, altitude/speed/course
+            // 999999999, satellites 0xFF). Store NaN so floatJson() emits
+            // null instead of a position 10,000 km up.
             gps.f_get_position(&sensorData.latitude, &sensorData.longitude, &sensorData.age);
-            sensorData.altitude = gps.altitude() / 100.0;
-            sensorData.speed = gps.speed() * 0.0185;
-            sensorData.course = gps.course() / 100.0;
-            sensorData.satellites = gps.satellites();
+            if (sensorData.latitude == TinyGPS::GPS_INVALID_F_ANGLE)
+            {
+                sensorData.latitude = NAN;
+                sensorData.longitude = NAN;
+            }
+            long altitude = gps.altitude();
+            sensorData.altitude = altitude == (long)TinyGPS::GPS_INVALID_ALTITUDE ? NAN : altitude / 100.0;
+            unsigned long speed = gps.speed();
+            sensorData.speed = speed == (unsigned long)TinyGPS::GPS_INVALID_SPEED ? NAN : speed * 0.0185;
+            unsigned long course = gps.course();
+            sensorData.course = course == (unsigned long)TinyGPS::GPS_INVALID_ANGLE ? NAN : course / 100.0;
+            unsigned short satellites = gps.satellites();
+            sensorData.satellites = satellites == TinyGPS::GPS_INVALID_SATELLITES ? 0 : satellites;
             xSemaphoreGive(dataMutex);
         }
 

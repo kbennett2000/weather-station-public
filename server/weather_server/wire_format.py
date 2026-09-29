@@ -2,7 +2,7 @@
 
 The sketches (sketches/{outdoor,indoor,basement}.ino) emit JSON-shaped
 strings by string-concatenating field names with String(<float>) values.
-Two notable wire-format quirks the adapter absorbs:
+Wire-format quirks the adapter absorbs:
 
 1. **`nan` text instead of valid JSON null** (BUG-08 in the findings
    doc). When the underlying sensor reading is NaN, the Arduino
@@ -23,6 +23,13 @@ Two notable wire-format quirks the adapter absorbs:
    The adapter derives `full_spectrum = visible + ir` when both are
    present; otherwise leaves it None.
 
+4. **TinyGPS "invalid" sentinels before the first fix.** After a cold
+   boot, until the receiver locks, TinyGPS reports lat/lon 1000,
+   altitude 10,000,000 m, speed 18,500,000 km/h, course 10,000,000° and
+   255 satellites, and pre-fix firmware passes them straight through.
+   Any GPS field outside its physical range (`_GPS_RANGES`) is dropped
+   so a bogus position never reaches the DB.
+
 Error envelopes (`{"error": "..."}`) are translated to a poll result of
 None — the same as a network failure.
 """
@@ -38,6 +45,16 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 _NAN_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_])(nan|NaN|NAN|undefined)(?![A-Za-z0-9_])")
+
+# Physically plausible bounds for each GPS payload field. See quirk 4.
+_GPS_RANGES: dict[str, tuple[float, float]] = {
+    "latitude": (-90.0, 90.0),
+    "longitude": (-180.0, 180.0),
+    "altitude_m": (-500.0, 9000.0),
+    "speed_kmh": (0.0, 1000.0),
+    "course_deg": (0.0, 360.0),
+    "satellites": (0, 64),
+}
 
 
 def sanitize_nan_tokens(text: str) -> str:
@@ -103,6 +120,7 @@ def _outdoor_to_payload(raw: dict[str, Any]) -> dict[str, Any]:
     _put_float(payload, "speed_kmh", raw.get("speed"))
     _put_float(payload, "course_deg", raw.get("course"))
     _put_int(payload, "satellites", raw.get("satellites"))
+    _drop_out_of_range_gps(payload)
 
     _put_int(payload, "rssi_dbm", raw.get("rssi"))
     uptime_ms = _clean_int(raw.get("uptime"))
@@ -111,6 +129,17 @@ def _outdoor_to_payload(raw: dict[str, Any]) -> dict[str, Any]:
     _put_int(payload, "free_heap_bytes", raw.get("freeHeap"))
 
     return payload
+
+
+def _drop_out_of_range_gps(payload: dict[str, Any]) -> None:
+    dropped = []
+    for key, (lo, hi) in _GPS_RANGES.items():
+        value = payload.get(key)
+        if value is not None and not lo <= value <= hi:
+            dropped.append(f"{key}={value}")
+            del payload[key]
+    if dropped:
+        log.info("dropped out-of-range GPS fields (no fix yet?): %s", ", ".join(dropped))
 
 
 def _indoor_to_payload(raw: dict[str, Any]) -> dict[str, Any]:
